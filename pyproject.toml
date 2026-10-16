@@ -25,3 +25,8 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+
+# Locally installed font files are ignored by Git; include them in a built wheel
+# after running scripts/install_fonts.py and verifying the OFL notice.
+[tool.hatch.build.targets.wheel.force-include]
+"src/pdf_works/resources/fonts" = "pdf_works/resources/fonts"

@@ -10,6 +10,8 @@
 git fetch origin
 git switch feature/native-page-edit-20261017
 .\.venv\Scripts\python.exe -m pip install -e ".[desktop,dev]"
+# 初回セットアップだけ：公式Zen Maru Gothicを取得・検証し、アプリ専用フォルダへ配置
+.\.venv\Scripts\python.exe scripts/install_fonts.py
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe scripts/generate_test_pdf.py tests/sample_40.pdf --pages 40
 .\.venv\Scripts\python.exe -m pdf_works
@@ -29,3 +31,10 @@ git switch feature/native-page-edit-20261017
 ## エラーの場合
 PRレビュー・CI結果・実機結果が揃うまでmainへマージしません。
 詳細なWindows情報・失敗時の操作手順・個人情報を含まないログを記録し、原文書のPDFや生徒情報は公開リポジトリへ投稿しないでください。
+
+## UIの書体・太さを実機で比較する
+- アプリ上部「文字」で、やわらか（Regular 400）／標準（Medium 500）／くっきり（Bold 700）を切り替える。初期値は標準。
+- 「書体：Zen Maru」と表示されたら、ローカル配置したアプリ専用フォントを認識。代替と出る場合、上記インストールスクリプトを実行しアプリを再起動。
+- 起動後のネット通信・Windowsへのフォントインストールは不要。フォントの初回取得にはネット接続が必要。
+- 日本語の「削除／元に戻す／別名保存」、薄い補足文字、PDFページ一覧を125%・150%表示倍率でも比較し、線が細く感じないものを選ぶ。
+- フォントファイルはGitHubには保存せず、配布版EXE/フォルダへ同梱する際はOFL.txtを含める。
