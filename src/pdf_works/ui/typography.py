@@ -25,36 +25,37 @@ LOCAL_FONTS = (
 )
 FONT_DIR = Path(__file__).resolve().parents[1] / "resources" / "fonts"
 _loaded_family: str | None = None
-_loaded_count: int = 0
-_initialized = False
+_loaded_files: set[str] = set()
 
 
-def load_local_fonts() -> bool:
-    """Register only packaged local fonts with Qt, never with Windows."""
-    global _initialized, _loaded_family, _loaded_count
-    if _initialized:
-        return _loaded_count == len(LOCAL_FONTS)
-    _initialized = True
-    for name in LOCAL_FONTS:
-        path = FONT_DIR / name
-        if not path.is_file():
-            continue
-        font_id = QFontDatabase.addApplicationFont(str(path))
-        if font_id == -1:
-            continue
-        families = QFontDatabase.applicationFontFamilies(font_id)
-        if families:
-            _loaded_family = families[0]
-            _loaded_count += 1
-    return _loaded_count == len(LOCAL_FONTS)
+def load_local_fonts(preset: str = "standard") -> bool:
+    """Register only the selected weight; other weights load on first use."""
+    global _loaded_family
+    filenames = dict(zip(PRESETS, LOCAL_FONTS))
+    name = filenames.get(preset, filenames["standard"])
+    # PRESETS ordering: gentle=Regular, standard=Medium, clear=Bold.
+    if name in _loaded_files:
+        return True
+    path = FONT_DIR / name
+    if not path.is_file():
+        return False
+    font_id = QFontDatabase.addApplicationFont(str(path))
+    if font_id == -1:
+        return False
+    families = QFontDatabase.applicationFontFamilies(font_id)
+    if not families:
+        return False
+    _loaded_family = families[0]
+    _loaded_files.add(name)
+    return True
 
 
 def font_status() -> dict[str, object]:
     return {
         "embedded": _loaded_family is not None,
-        "complete": _loaded_count == len(LOCAL_FONTS),
+        "complete": all((FONT_DIR / name).is_file() for name in LOCAL_FONTS),
         "family": _loaded_family or "",
-        "loaded_weights": _loaded_count,
+        "loaded_weights": len(_loaded_files),
     }
 
 
@@ -70,6 +71,7 @@ def _fallback_font_family() -> str:
 def font_for_preset(preset: str) -> QFont:
     if preset not in WEIGHTS:
         preset = "standard"
+    load_local_fonts(preset)
     family = _loaded_family or _fallback_font_family()
     font = QFont(family)
     font.setPointSize(11)
