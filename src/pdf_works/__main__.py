@@ -6,7 +6,7 @@ import sys
 def main()->int:
     multiprocessing.freeze_support()
     from PySide6.QtWidgets import QApplication
-    from .ui.main_window import MainWindow
+    from .ui.editor_window import EditWindow as MainWindow
     app=QApplication(sys.argv)
     window=MainWindow()
     window.show()

@@ -43,6 +43,7 @@ def run_worker(requests: Any, results: Any) -> None:
     import fitz
     document=None
     generation=-1
+    original_rotations=[]
     deferred=deque()
     while True:
         try:
@@ -65,7 +66,8 @@ def run_worker(requests: Any, results: Any) -> None:
         op=req.get("op")
         if op=="stop":
             break
-        response={"id":req.get("id"),"op":op,"generation":req.get("generation")}
+        response={"id":req.get("id"),"op":op,"generation":req.get("generation"),
+                  "slot":req.get("slot"),"epoch":req.get("epoch")}
         try:
             if op=="open":
                 if document is not None:
@@ -79,13 +81,25 @@ def run_worker(requests: Any, results: Any) -> None:
                     raise ValueError("パスワード保護されたPDFはalpha版では未対応です")
                 if not document.is_pdf:
                     raise ValueError("PDFを選択してください")
+                original_rotations=[p.rotation for p in document]
                 response.update(status="ok",sizes=page_metadata(document),count=len(document))
             elif op in ("render","thumb"):
                 if document is None or req.get("generation")!=generation:
                     continue
-                image=(render_region(document,req["page"],tuple(req["clip"]),float(req["scale"]))
-                       if op=="render" else render_thumbnail(document,req["page"]))
-                response.update(status="ok",page=req["page"],image=image)
+                page_no=req["page"]
+                delta=req.get("rotation",0)
+                if delta not in (0,90,180,270):
+                    raise ValueError("Invalid page rotation")
+                document[page_no].set_rotation((original_rotations[page_no]+delta)%360)
+                image=(render_region(document,page_no,tuple(req["clip"]),float(req["scale"]))
+                       if op=="render" else render_thumbnail(document,page_no))
+                response.update(status="ok",page=page_no,image=image)
+            elif op=="export":
+                if document is None or req.get("generation")!=generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.export import save_edited_pdf
+                count=save_edited_pdf(req["path"],req["destination"],req["pages"])
+                response.update(status="ok",count=count,destination=req["destination"])
             else:
                 raise ValueError(f"Unknown operation {op!r}")
         except Exception as exc:
