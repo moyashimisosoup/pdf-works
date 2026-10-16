@@ -75,3 +75,7 @@ py -3 -m venv .venv
 [Windows実機確認手順](docs/ALPHA_RUN.md) / [変更履歴](docs/CHANGELOG.md)
 
 **注意**：現段階ではPDFの表示とズーム・ページ移動のみ。保存・切り出し・OCRは未実装です。開発環境でバックエンド5テストに合格しましたが、WindowsのQt画面動作は未検証です。
+
+## 編集機能の開発ブランチ
+
+Windowsネイティブのページ編集beta（90°回転、削除、上下移動、Undo、別名保存）を `feature/native-page-edit-20261017` で開発しています。mainは実機動作確認済みの閲覧用alphaを維持します。betaはQt/Windows操作未確認のため、試す際は [beta実機手順](docs/BETA_RUN.md) を先に確認してください。
