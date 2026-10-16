@@ -4,16 +4,18 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pdf-works"
-version = "0.0.0"
-description = "Lightweight Windows PDF workbench (scaffold only)"
+version = "5.0.0a0"
+description = "Lightweight native PDF viewer for Windows (alpha)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-# Planned UI/PDF stack; optional to avoid heavy installation during scaffold stage.
 desktop = ["PySide6>=6.7", "PyMuPDF>=1.24"]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "PyMuPDF>=1.24"]
+
+[project.scripts]
+pdf-works = "pdf_works.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pdf_works"]

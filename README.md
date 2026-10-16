@@ -64,4 +64,14 @@ docs/                正本の仕様と記録
 
 実際の学校資料、個人情報を含むPDF、手書き数字の生サンプル、個人の出力ファイルはこの公開リポジトリにコミットしないでください。評価データは別の非公開保存先で管理し、公開テストには人工データを使用します。
 
-*現時点で実行可能なアプリはまだありません。*
+**alphaの起動（Windows / Python 3.11+）**
+
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\python.exe -m pip install -e ".[desktop,dev]"
+.venv\Scripts\python.exe -m pdf_works
+```
+
+[Windows実機確認手順](docs/ALPHA_RUN.md) / [変更履歴](docs/CHANGELOG.md)
+
+**注意**：現段階ではPDFの表示とズーム・ページ移動のみ。保存・切り出し・OCRは未実装です。開発環境でバックエンド5テストに合格しましたが、WindowsのQt画面動作は未検証です。
