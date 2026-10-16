@@ -79,3 +79,11 @@ py -3 -m venv .venv
 ## 編集機能の開発ブランチ
 
 Windowsネイティブのページ編集beta（90°回転、削除、上下移動、Undo、別名保存）を `feature/native-page-edit-20261017` で開発しています。mainは実機動作確認済みの閲覧用alphaを維持します。betaはQt/Windows操作未確認のため、試す際は [beta実機手順](docs/BETA_RUN.md) を先に確認してください。
+
+## フォントと文字の太さ（beta）
+
+- **Zen Maru Gothic** をQtが直接読み込み、Windowsへのフォントインストール不要。
+- 初回だけ `.\.venv\Scripts\python.exe scripts/install_fonts.py` を実行。公式OFL配布元から3ウェイトをチェックサム検証付きで取得。
+- 起動後は完全オフライン。上部「文字」で **400 / 500（標準）/ 700** を比較し、設定を保持。
+- フォントファイルはGitHubに保存せず、配布時はOFLライセンスを同梱。
+- 詳細：[文字の視認性評価](docs/TYPOGRAPHY_EVALUATION.md)。新UIはまだWindowsで未検証です。

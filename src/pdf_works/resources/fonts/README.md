@@ -9,7 +9,7 @@
 - 取得先：<https://github.com/googlefonts/zen-marugothic>
 - 固定コミット：`553c872b216d1290e2902a466edcdc9682f0df6a`
 - 書体：Regular 400、Medium 500、Bold 700
-- 取得物：3つのTTFと `OFL.txt` （SIL OFL 1.1）
+- 取得物：3つのTTFと `OFL.txt` （SIL OFL 1.1。ライセンス本文はこのリポジトリにも保存）
 - 内容：GitオブジェクトのSHA-1を検証し、整合しないものは使用しない
 - 実行時：外部接続・Windows全体へのフォント登録は行わない
 - フォント本体の容量：約11.4MB、配布サイズ・起動時間はWindows実機で再測定する
