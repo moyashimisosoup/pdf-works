@@ -21,6 +21,7 @@ from pdf_works.ui.main_window import rgb_to_pixmap
 
 def capture(output: Path, pdf_path: Path) -> None:
     app = QApplication.instance() or QApplication(sys.argv)
+    app.setStyle("Fusion")  # Match pdf_works.__main__ on Windows.
     # Keep the screenshot deterministic and prevent spawned render worker I/O.
     EditWindow._start_worker = lambda self: None
 

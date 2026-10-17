@@ -20,3 +20,6 @@ Remove-Item Env:QT_QPA_PLATFORM
 ```
 
 本物の端末での外観レビューは、通常のアプリを起動しユーザーがWindowsの `Win + Shift + S` で撮影した画面を最終判断に使用する。
+
+## 2026-10-17 プルダウン撮影
+Windows Qt CIでフォント設定の独自メニューの展開画像取得に成功。単に開くだけでは選択値が変更されないことを確認。QtのFusionスタイルを使って実アプリと同じベースで撮影する。詳細：<https://github.com/moyashimisosoup/pdf-works/actions/runs/38992779502>。利用者PCの実機スクショではない。
