@@ -62,6 +62,9 @@ def capture(output: Path, pdf_path: Path) -> None:
     if not window.grab().save(str(pressed)):
         raise RuntimeError("Failed to save pressed-state Qt screenshot")
 
+    if regular.read_bytes() == pressed.read_bytes():
+        raise RuntimeError("Qt pressed state produced no visible screenshot change")
+
     window.open_button.setDown(False)
     window.save_button.setDown(False)
     window._edit_buttons["right"].setDown(False)
