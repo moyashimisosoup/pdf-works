@@ -4,6 +4,7 @@
 
 - `pdf-works-qt-normal.png`：立体ボタンの通常状態
 - `pdf-works-qt-pressed.png`：「開く」「別名保存」「右90°」が押下中の状態
+- `pdf-works-qt-dropdown-open.png`：文字設定の独自プルダウンを展開したQtポップアップ部分
 
 **重要：これはGitHub ActionsのWindowsホスト上で生成したQt画面プレビューです。ユーザー本人のPCのスクリーンショットではありません。** 画像に表示するPDFは人工生成した40ページの試験データで、PDF描画エンジンのUIワーカーはスクショ専用処理中だけ停止する。Windows実機での機能・操作性・応答性試験とは区別する。
 

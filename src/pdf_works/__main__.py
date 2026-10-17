@@ -8,6 +8,9 @@ def main()->int:
     from PySide6.QtWidgets import QApplication
     from .ui.editor_window import EditWindow as MainWindow
     app=QApplication(sys.argv)
+    # Fusion gives Qt controls a stable platform-independent baseline.
+    # Native Windows file dialogs and the window frame remain untouched.
+    app.setStyle("Fusion")
     from .ui.typography import load_local_fonts, font_for_preset
     from PySide6.QtCore import QSettings
     chosen = str(QSettings("pdf-works", "desktop").value("text_weight", "standard"))

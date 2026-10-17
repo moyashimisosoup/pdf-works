@@ -69,8 +69,26 @@ def capture(output: Path, pdf_path: Path) -> None:
     window.save_button.setDown(False)
     window._edit_buttons["right"].setDown(False)
     app.processEvents()
-    print(f"Qt application client area captured on {sys.platform}:")
-    for f in (regular, pressed):
+
+    # The combobox popup is a separate top-level Qt window. Grab that window,
+    # otherwise the main-window capture would not include the expanded choices.
+    dropdown_path = output / "pdf-works-qt-dropdown-open.png"
+    combo = window.font_combo
+    start_selection = combo.currentIndex()
+    combo.showPopup()
+    app.processEvents()
+    popup = combo.view().window()
+    if not combo.view().isVisible() or popup.width() < 120 or popup.height() < 40:
+        raise RuntimeError("Soft Outline dropdown popup failed to open")
+    if not popup.grab().save(str(dropdown_path)):
+        raise RuntimeError("Failed to save expanded dropdown screenshot")
+    combo.hidePopup()
+    app.processEvents()
+    if combo.currentIndex() != start_selection:
+        raise RuntimeError("Simply opening a dropdown changed its selection")
+
+    print(f"Qt application client area and dropdown captured on {sys.platform}:")
+    for f in (regular, pressed, dropdown_path):
         print(f"  {f} ({f.stat().st_size} bytes)")
     window.close()
 
