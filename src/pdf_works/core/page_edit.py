@@ -29,19 +29,40 @@ class EditSession:
         if len(self._history) > 100:
             self._history.pop(0)
 
+    def _indices(self, indices: list[int] | tuple[int, ...]) -> list[int]:
+        if not indices:
+            raise ValueError("Select at least one page")
+        if any(type(index) is not int or not 0 <= index < len(self._pages)
+               for index in indices):
+            raise IndexError("Page out of range")
+        selected = sorted(set(indices))
+        if len(selected) != len(indices):
+            raise ValueError("Duplicate selected page")
+        return selected
+
     def rotate(self, index: int, degrees: int):
+        self.rotate_many([index], degrees)
+
+    def rotate_many(self, indices: list[int] | tuple[int, ...], degrees: int):
         if degrees not in (-90, 90, 180):
             raise ValueError("Only right-angle rotation is supported in beta")
-        item = self._pages[index]
+        selected = self._indices(indices)
         self._record()
-        self._pages[index] = PageSpec(item.source_index, (item.rotation_delta + degrees) % 360)
+        for index in selected:
+            item = self._pages[index]
+            self._pages[index] = PageSpec(
+                item.source_index, (item.rotation_delta + degrees) % 360)
 
     def delete(self, index: int):
-        if len(self._pages) == 1:
+        self.delete_many([index])
+
+    def delete_many(self, indices: list[int] | tuple[int, ...]):
+        selected = self._indices(indices)
+        if len(selected) >= len(self._pages):
             raise ValueError("The last remaining page cannot be removed")
-        self._pages[index]
         self._record()
-        del self._pages[index]
+        for index in reversed(selected):
+            del self._pages[index]
 
     def move(self, from_index: int, to_index: int):
         self._pages[from_index]
