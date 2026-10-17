@@ -9,15 +9,14 @@ from PySide6.QtWidgets import (QAbstractItemView,QApplication,QComboBox,QFileDia
     QMessageBox,QPushButton,QSplitter,QVBoxLayout,QWidget)
 from .viewer import PdfViewer
 from .button_theme import BUTTON_STYLE
+from .theme import COMBO_STYLE
+from .widgets.combo_box import SoftComboBox
 from .typography import PRESETS, font_for_preset, font_status
 from ..workers.bridge import PdfBridge
 
 STYLE="""
 QMainWindow,QWidget {background:#FCFBF7;color:#351F39;}
 QLabel {border:0px;}
-QComboBox {border:1px solid #D8D0D4;border-radius:11px;
-padding:8px 13px;min-height:21px;background:#FCFBF7;color:#351F39;}
-QComboBox:hover {border-color:#726A95;}
 QFrame#panel {border:1px solid #D8D0D4;border-radius:22px;}
 QListWidget {background:#FCFBF7;border:0px;outline:none;}
 QListWidget::item {border-radius:12px;margin:3px;padding:4px;}
@@ -42,7 +41,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("pdf-works | Soft Outline")
         self.resize(1160,780)
         self.setMinimumSize(560,440)
-        self.setStyleSheet(STYLE + BUTTON_STYLE)
+        self.setStyleSheet(STYLE + BUTTON_STYLE + COMBO_STYLE)
         self._pdf_path=None
         self._generation=0
         self._sizes=[]
@@ -88,7 +87,7 @@ class MainWindow(QMainWindow):
         self.page_label=QLabel("0 / 0")
         self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.page_label.setMinimumWidth(65)
-        self.zoom_combo=QComboBox()
+        self.zoom_combo=SoftComboBox()
         for z in (50,75,100,125,150,200,250,300):
             self.zoom_combo.addItem(f"{z}%",z/100)
         self.zoom_combo.setCurrentIndex(2)
@@ -99,7 +98,7 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.zoom_combo)
         bar.addSpacing(10)
         bar.addWidget(QLabel("文字"))
-        self.font_combo = QComboBox()
+        self.font_combo = SoftComboBox()
         self.font_combo.setToolTip("操作文字の太さを比較して選べます")
         for key, title in PRESETS.items():
             self.font_combo.addItem(title, key)
