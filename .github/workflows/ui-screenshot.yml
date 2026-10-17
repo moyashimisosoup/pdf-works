@@ -1,0 +1,44 @@
+name: Windows Qt UI Screenshots
+
+on:
+  pull_request:
+    paths:
+      - "src/pdf_works/ui/**"
+      - "scripts/capture_ui.py"
+      - ".github/workflows/ui-screenshot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pdf-works-ui-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshot:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Qt and PDF dependencies
+        run: python -m pip install -e ".[desktop]"
+      - name: Fetch pinned OFL UI fonts
+        run: python scripts/install_fonts.py
+      - name: Create synthetic 40-page PDF
+        run: python scripts/generate_test_pdf.py tests/sample_40.pdf --pages 40
+      - name: Capture Windows Qt widget pixels
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python scripts/capture_ui.py output/ui-screenshots tests/sample_40.pdf
+      - name: Upload Windows Qt screenshot previews
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-works-windows-qt-button-previews
+          path: output/ui-screenshots/*.png
+          retention-days: 14
+          if-no-files-found: error
