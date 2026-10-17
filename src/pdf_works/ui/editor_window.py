@@ -31,12 +31,15 @@ class EditWindow(MainWindow):
             ("undo", "元に戻す", ("undo",)),
         ):
             button = QPushButton(label)
+            if key == "delete":
+                button.setObjectName("danger")
             button.clicked.connect(lambda checked=False, a=args: self._edit(a))
             self._edit_buttons[key] = button
             tools.addWidget(button)
         tools.addStretch(1)
         self.centralWidget().layout().insertLayout(2, tools)
         self.save_button = QPushButton("別名保存")
+        self.save_button.setObjectName("primary")
         self.save_button.clicked.connect(self._save_as)
         self.centralWidget().layout().itemAt(0).layout().insertWidget(2, self.save_button)
         self._update_controls()

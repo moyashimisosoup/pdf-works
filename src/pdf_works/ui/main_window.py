@@ -8,18 +8,16 @@ from PySide6.QtWidgets import (QAbstractItemView,QApplication,QComboBox,QFileDia
     QFrame,QHBoxLayout,QLabel,QListWidget,QListWidgetItem,QMainWindow,
     QMessageBox,QPushButton,QSplitter,QVBoxLayout,QWidget)
 from .viewer import PdfViewer
+from .button_theme import BUTTON_STYLE
 from .typography import PRESETS, font_for_preset, font_status
 from ..workers.bridge import PdfBridge
 
 STYLE="""
 QMainWindow,QWidget {background:#FCFBF7;color:#351F39;}
 QLabel {border:0px;}
-QPushButton,QComboBox {border:1px solid #D8D0D4;border-radius:11px;
+QComboBox {border:1px solid #D8D0D4;border-radius:11px;
 padding:8px 13px;min-height:21px;background:#FCFBF7;color:#351F39;}
-QPushButton:hover,QComboBox:hover {border-color:#726A95;}
-QPushButton:pressed {background:#F4E8C1;}
-QPushButton:disabled {color:#99939B;}
-QPushButton#primary {border-color:#709FB0;}
+QComboBox:hover {border-color:#726A95;}
 QFrame#panel {border:1px solid #D8D0D4;border-radius:22px;}
 QListWidget {background:#FCFBF7;border:0px;outline:none;}
 QListWidget::item {border-radius:12px;margin:3px;padding:4px;}
@@ -44,7 +42,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("pdf-works | Soft Outline")
         self.resize(1160,780)
         self.setMinimumSize(560,440)
-        self.setStyleSheet(STYLE)
+        self.setStyleSheet(STYLE + BUTTON_STYLE)
         self._pdf_path=None
         self._generation=0
         self._sizes=[]
