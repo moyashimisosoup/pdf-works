@@ -71,6 +71,26 @@ def capture(output: Path, pdf_path: Path) -> None:
     window._edit_buttons["right"].setDown(False)
     app.processEvents()
 
+    # Draw the normalized rectangle using an actual Qt viewport mouse drag.
+    # This is the same widget interaction used in the Windows version.
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    window.roi_toggle.setChecked(True)
+    start = window.viewer.mapFromScene(QPointF(65, 80))
+    end = window.viewer.mapFromScene(QPointF(260, 245))
+    QTest.mousePress(window.viewer.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    QTest.mouseMove(window.viewer.viewport(), pos=end)
+    QTest.mouseRelease(window.viewer.viewport(), Qt.MouseButton.LeftButton, pos=end)
+    app.processEvents()
+    if window.viewer.roi is None or not window.roi_export.isEnabled():
+        raise RuntimeError("ROI drag failed or PNG export button remains disabled")
+    roi_screenshot = output / "pdf-works-qt-roi-selected.png"
+    if not window.grab().save(str(roi_screenshot)):
+        raise RuntimeError("Failed to save selected ROI screenshot")
+    if roi_screenshot.read_bytes() == regular.read_bytes():
+        raise RuntimeError("ROI selection was not visible")
+    window.roi_toggle.setChecked(False)
+
     # The combobox popup is a separate top-level Qt window. Grab that window,
     # otherwise the main-window capture would not include the expanded choices.
     dropdown_path = output / "pdf-works-qt-dropdown-open.png"
@@ -89,7 +109,7 @@ def capture(output: Path, pdf_path: Path) -> None:
         raise RuntimeError("Simply opening a dropdown changed its selection")
 
     print(f"Qt application client area and dropdown captured on {sys.platform}:")
-    for f in (regular, pressed, dropdown_path):
+    for f in (regular, pressed, roi_screenshot, dropdown_path):
         print(f"  {f} ({f.stat().st_size} bytes)")
     window.close()
 

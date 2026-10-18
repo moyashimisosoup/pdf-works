@@ -25,11 +25,15 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Qt and PDF dependencies
-        run: python -m pip install -e ".[desktop]"
+        run: python -m pip install -e ".[desktop,dev]"
       - name: Fetch pinned OFL UI fonts
         run: python scripts/install_fonts.py
       - name: Create synthetic 40-page PDF
         run: python scripts/generate_test_pdf.py tests/sample_40.pdf --pages 40
+      - name: Test real Qt ROI viewport drag
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_roi_ui.py -q
       - name: Capture Windows Qt widget pixels
         env:
           QT_QPA_PLATFORM: offscreen
