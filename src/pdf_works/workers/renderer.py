@@ -100,6 +100,18 @@ def run_worker(requests: Any, results: Any) -> None:
                 from ..core.export import save_edited_pdf
                 count=save_edited_pdf(req["path"],req["destination"],req["pages"])
                 response.update(status="ok",count=count,destination=req["destination"])
+            elif op=="roi_export":
+                if document is None or req.get("generation")!=generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.crop import NormalizedROI, export_region_pngs
+                # Read only the already-opened source file, never an untrusted
+                # path supplied by the exporting caller.
+                source_path = document.name
+                roi=NormalizedROI(*req["roi"])
+                paths=export_region_pngs(source_path,req["destination_dir"],
+                                          roi,req["pages"],dpi=req.get("dpi",200))
+                response.update(status="ok",count=len(paths),
+                                files=[str(path) for path in paths])
             else:
                 raise ValueError(f"Unknown operation {op!r}")
         except Exception as exc:
