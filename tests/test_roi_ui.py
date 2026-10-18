@@ -72,3 +72,20 @@ def test_no_drag_mode_does_not_create_roi(app):
     view.reset_document()
     assert view.roi is None
     view.close()
+
+
+def test_tiny_drag_keeps_previous_roi(app):
+    view = PdfViewer()
+    view.resize(600, 550)
+    view.set_page(300, 400)
+    view.show()
+    app.processEvents()
+    view.set_roi((.1, .1, .5, .5))
+    view.enable_roi_selection(True)
+    first = view.mapFromScene(QPointF(70, 75))
+    near = view.mapFromScene(QPointF(72, 77))
+    QTest.mousePress(view.viewport(), Qt.MouseButton.LeftButton, pos=first)
+    QTest.mouseMove(view.viewport(), pos=near)
+    QTest.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton, pos=near)
+    assert view.roi == (.1, .1, .5, .5)
+    view.close()
