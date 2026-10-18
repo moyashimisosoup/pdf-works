@@ -1,7 +1,7 @@
 """Non-destructive page editor on top of the alpha viewer."""
 from __future__ import annotations
 from pathlib import Path
-from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMessageBox, QPushButton, QListWidgetItem
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QListWidgetItem
 from .main_window import MainWindow
 from ..core.page_edit import EditSession
 
