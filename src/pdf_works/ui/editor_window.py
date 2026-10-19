@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QListWidgetItem
 from .main_window import MainWindow
+from .roi_gallery import CropGallery
 from ..core.page_edit import EditSession
 
 
@@ -14,6 +15,10 @@ class EditWindow(MainWindow):
         self._saving = False
         self._roi_exporting = False
         self._roi_request = None
+        self._roi_sources_pending = []
+        self._gallery_files = []
+        self._gallery_sources = []
+        self._gallery = None
         self._save_request = None
         self._saved_snapshot: list[tuple[int, int]] | None = None
         super().__init__()
@@ -61,7 +66,11 @@ class EditWindow(MainWindow):
         self.roi_export.setObjectName("primary")
         self.roi_export.setToolTip("同じ相対位置を現在の全ページからPNG出力")
         self.roi_export.clicked.connect(self._export_roi)
-        for button in (self.roi_toggle, self.roi_clear, self.roi_export):
+        self.gallery_button = QPushButton("一覧表示")
+        self.gallery_button.setToolTip("前回書き出した切り出し画像を一覧で開きます")
+        self.gallery_button.clicked.connect(self._show_roi_gallery)
+        for button in (self.roi_toggle, self.roi_clear, self.roi_export,
+                       self.gallery_button):
             button.setMinimumWidth(button.sizeHint().width() + 14)
             roi_tools.addWidget(button)
         self.roi_info = QLabel("範囲未指定")
@@ -103,9 +112,39 @@ class EditWindow(MainWindow):
             QMessageBox.warning(self, "出力できません", "処理が混雑しています。少し待ってください。")
             return
         self._roi_request = rid
+        self._roi_sources_pending = [p.source_index for p in self._session.pages]
         self._roi_exporting = True
         self._update_controls()
         self.statusBar().showMessage("PNGを出力中…")
+
+    def _show_roi_gallery(self):
+        if not self._gallery_files or len(self._gallery_files) != len(self._gallery_sources):
+            return
+        if self._gallery is not None:
+            self._gallery.show()
+            self._gallery.raise_()
+            self._gallery.activateWindow()
+            return
+        gallery = CropGallery(self._gallery_files, self._gallery_sources, self)
+        self._gallery = gallery
+        gallery.source_requested.connect(self._jump_to_source)
+        gallery.destroyed.connect(self._gallery_closed)
+        gallery.show()
+
+    def _gallery_closed(self, *_):
+        self._gallery = None
+
+    def _jump_to_source(self, source_index):
+        if self._session is None:
+            return
+        for index, page in enumerate(self._session.pages):
+            if page.source_index == source_index:
+                self._select_page(index)
+                self.showNormal()
+                self.raise_()
+                self.activateWindow()
+                return
+        self.statusBar().showMessage("対象ページは現在の編集結果から削除されています。")
 
     def _dirty(self):
         return self._session is not None and self._session.snapshot() != self._saved_snapshot
@@ -122,6 +161,10 @@ class EditWindow(MainWindow):
         self._session = None
         self._source_sizes = []
         self._saved_snapshot = None
+        self._gallery_files = []
+        self._gallery_sources = []
+        if self._gallery is not None:
+            self._gallery.close()
         self._edit_epoch += 1
         super().open_pdf(path)
         self.roi_toggle.setChecked(False)
@@ -137,6 +180,10 @@ class EditWindow(MainWindow):
             self._roi_request = None
             self._roi_exporting = False
             if response.get("status") == "ok":
+                files = response.get("files", [])
+                if len(files) == len(self._roi_sources_pending):
+                    self._gallery_files = list(files)
+                    self._gallery_sources = list(self._roi_sources_pending)
                 self.statusBar().showMessage(
                     f"{response['count']}ページ分のPNGを出力しました。"
                 )
@@ -145,7 +192,10 @@ class EditWindow(MainWindow):
                     self, "PNGを出力できませんでした",
                     response.get("message", "原因不明のエラー"),
                 )
+            self._roi_sources_pending = []
             self._update_controls()
+            if response.get("status") == "ok" and self._gallery_files:
+                self._show_roi_gallery()
             return
         if op == "export":
             if response.get("id") != self._save_request:
@@ -216,7 +266,7 @@ class EditWindow(MainWindow):
         self._update_controls()
 
     def _edit(self, action):
-        if self._session is None or self._saving:
+        if self._session is None or self._saving or self._roi_exporting:
             return
         idx = self._current_page
         operation = action[0]
@@ -258,6 +308,7 @@ class EditWindow(MainWindow):
             self.roi_toggle.setEnabled(ready)
             self.roi_clear.setEnabled(ready and self.viewer.roi is not None)
             self.roi_export.setEnabled(ready and self.viewer.roi is not None)
+            self.gallery_button.setEnabled(bool(self._gallery_files))
 
     def _save_as(self):
         if self._session is None or self._saving or self._roi_exporting or not self._pdf_path:
