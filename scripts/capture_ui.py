@@ -129,10 +129,21 @@ def capture(output: Path, pdf_path: Path) -> None:
     window._show_roi_gallery()
     from PySide6.QtTest import QTest
     gallery = window._gallery
-    QTest.qWait(1100)
     app.processEvents()
+    gallery._request_visible()
+    for _ in range(65):
+        app.processEvents()
+        if gallery._loaded:
+            break
+        QTest.qWait(100)
     if gallery.items.count() != 40 or not gallery._loaded:
-        raise RuntimeError("Lazy gallery list did not show artificial thumbnails")
+        raise RuntimeError(
+            "Lazy gallery did not load thumbnails: "
+            f"count={gallery.items.count()}, visible={gallery.isVisible()}, "
+            f"viewport={gallery.items.viewport().rect()}, "
+            f"pending={list(gallery._pending)}, "
+            f"preview_index={gallery._preview_index}"
+        )
     gallery_capture = output / "pdf-works-qt-crop-gallery.png"
     if not gallery.grab().save(str(gallery_capture)):
         raise RuntimeError("Failed to capture ROI gallery screenshot")
