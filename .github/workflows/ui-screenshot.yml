@@ -34,6 +34,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/test_roi_ui.py -q
+      - name: Test lazy ROI gallery and source navigation
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_gallery_ui.py -q
       - name: Capture Windows Qt widget pixels
         env:
           QT_QPA_PLATFORM: offscreen

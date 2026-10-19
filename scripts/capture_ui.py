@@ -13,7 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import fitz
 from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 from pdf_works.core.page_edit import EditSession
 from pdf_works.ui.editor_window import EditWindow
 from pdf_works.ui.main_window import rgb_to_pixmap
@@ -108,8 +108,39 @@ def capture(output: Path, pdf_path: Path) -> None:
     if combo.currentIndex() != start_selection:
         raise RuntimeError("Simply opening a dropdown changed its selection")
 
+    # The separate gallery shows 40 artificial snippets. No worker needed.
+    thumbnails = output / "artificial-gallery-pngs"
+    thumbnails.mkdir(exist_ok=True)
+    files = []
+    for idx in range(40):
+        path = thumbnails / f"item_{idx:02d}.png"
+        qimg = QImage(250, 160, QImage.Format.Format_RGB32)
+        qimg.fill(QColor("#E8F2F3") if idx % 2 == 0 else QColor("#F0ECF4"))
+        painter = QPainter(qimg)
+        painter.setPen(QColor("#351F39"))
+        painter.drawText(qimg.rect(), Qt.AlignmentFlag.AlignCenter,
+                         f"Sample {idx+1} / 40")
+        painter.end()
+        if not qimg.save(str(path)):
+            raise RuntimeError("Failed to create artificial gallery file")
+        files.append(path)
+    window._gallery_files = [str(p) for p in files]
+    window._gallery_sources = list(range(40))
+    window._show_roi_gallery()
+    from PySide6.QtTest import QTest
+    gallery = window._gallery
+    QTest.qWait(1100)
+    app.processEvents()
+    if gallery.items.count() != 40 or not gallery._loaded:
+        raise RuntimeError("Lazy gallery list did not show artificial thumbnails")
+    gallery_capture = output / "pdf-works-qt-crop-gallery.png"
+    if not gallery.grab().save(str(gallery_capture)):
+        raise RuntimeError("Failed to capture ROI gallery screenshot")
+    gallery.close()
+    app.processEvents()
+
     print(f"Qt application client area and dropdown captured on {sys.platform}:")
-    for f in (regular, pressed, roi_screenshot, dropdown_path):
+    for f in (regular, pressed, roi_screenshot, dropdown_path, gallery_capture):
         print(f"  {f} ({f.stat().st_size} bytes)")
     window.close()
 
