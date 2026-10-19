@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from .widgets.combo_box import SoftComboBox
 
 THUMB_LIMIT = 48
+MAX_PENDING = 3
 MAX_DECODE_PIXELS = 16_000_000
 
 
@@ -62,6 +63,7 @@ class CropGallery(QDialog):
         self._loaded = OrderedDict()
         self._pending = {}
         self._preview_index = -1
+        self._preview_image = QImage()
         self.setWindowTitle("pdf-works | 切り出し一覧")
         self.setWindowFlag(Qt.WindowType.Window, True)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -158,9 +160,20 @@ class CropGallery(QDialog):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._display_preview()
         self._schedule_visible()
 
+    def _display_preview(self):
+        if not self._preview_image.isNull():
+            pixmap = QPixmap.fromImage(self._preview_image)
+            self.preview.setPixmap(pixmap.scaled(
+                self.preview.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+
     def _request_visible(self):
+        if self._preview_index >= 0:
+            self._schedule_read(self._preview_index, "preview", QSize(780, 660))
         viewport = self.items.viewport().rect()
         for idx in range(self.items.count()):
             item = self.items.item(idx)
@@ -169,12 +182,11 @@ class CropGallery(QDialog):
             if idx in self._loaded:
                 continue
             self._schedule_read(idx, "thumb", QSize(184, 152))
-        if self._preview_index >= 0:
-            self._schedule_read(self._preview_index, "preview", QSize(780, 660))
 
     def _schedule_read(self, index: int, kind: str, size: QSize):
         key = (index, kind)
-        if key in self._pending or (kind == "thumb" and index in self._loaded):
+        if (key in self._pending or len(self._pending) >= MAX_PENDING
+                or (kind == "thumb" and index in self._loaded)):
             return
         if kind == "preview" and self._preview_index != index:
             return
@@ -186,13 +198,15 @@ class CropGallery(QDialog):
     @Slot(int, str, QImage)
     def _decoded(self, index: int, kind: str, image: QImage):
         self._pending.pop((index, kind), None)
+        self._schedule_visible()
         if image.isNull():
             if kind == "preview" and self._preview_index == index:
                 self.preview.setText("画像を表示できません")
             return
         if kind == "preview":
             if index == self._preview_index:
-                self.preview.setPixmap(QPixmap.fromImage(image))
+                self._preview_image = image
+                self._display_preview()
             return
         self._loaded[index] = True
         self._loaded.move_to_end(index)
@@ -203,6 +217,7 @@ class CropGallery(QDialog):
 
     def _select_preview(self, index: int):
         self._preview_index = index
+        self._preview_image = QImage()
         self.preview.clear()
         if index < 0:
             return
