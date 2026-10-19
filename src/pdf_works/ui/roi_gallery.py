@@ -9,13 +9,15 @@ from collections import OrderedDict
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Qt, QTimer, QSize, Signal, Slot
-from PySide6.QtGui import QIcon, QImage, QImageReader, QPixmap
+from PySide6.QtGui import QColor, QIcon, QImage, QImageReader, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QDialog, QHBoxLayout, QLabel, QListView, QListWidget, QListWidgetItem,
     QPushButton, QSplitter, QVBoxLayout, QWidget,
 )
 
 from .widgets.combo_box import SoftComboBox
+from .button_theme import BUTTON_STYLE
+from .theme import COMBO_STYLE
 
 THUMB_LIMIT = 48
 MAX_PENDING = 3
@@ -77,7 +79,7 @@ class CropGallery(QDialog):
             QListWidget::item:selected { background:#F0ECF4; color:#351F39; }
             QLabel#preview { background:white; border:1px solid #D8D0D4;
                              border-radius:16px; }
-        """)
+        """ + BUTTON_STYLE + COMBO_STYLE)
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 14)
         header = QHBoxLayout()
@@ -107,10 +109,12 @@ class CropGallery(QDialog):
         self.items.setIconSize(QSize(144, 118))
         self.items.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
         self.items.setSelectionMode(QListView.SelectionMode.SingleSelection)
+        self._placeholder_icon = self._make_placeholder()
         for idx, source in enumerate(self._sources):
             item = QListWidgetItem(f"{idx+1} · 元{source+1}")
             item.setData(Qt.ItemDataRole.UserRole, source)
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item.setIcon(self._placeholder_icon)
             item.setSizeHint(QSize(180, 160))
             self.items.addItem(item)
         splitter.addWidget(self.items)
@@ -143,6 +147,22 @@ class CropGallery(QDialog):
         )
         self._change_tile_size()
         self.items.setCurrentRow(0)
+
+    @staticmethod
+    def _make_placeholder():
+        pixmap = QPixmap(184, 152)
+        pixmap.fill(QColor("#FCFBF7"))
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor("#D8D0D4"), 2))
+        painter.setBrush(QColor("#F8F6FA"))
+        painter.drawRoundedRect(18, 7, 148, 135, 12, 12)
+        painter.setPen(QPen(QColor("#C9BFCE"), 4))
+        for idx, length in enumerate((88, 105, 68)):
+            y = 46 + idx * 20
+            painter.drawLine(42, y, 42 + length, y)
+        painter.end()
+        return QIcon(pixmap)
 
     def _change_tile_size(self, *_):
         px = int(self.size_combo.currentData())
@@ -213,7 +233,7 @@ class CropGallery(QDialog):
         self.items.item(index).setIcon(QIcon(QPixmap.fromImage(image)))
         while len(self._loaded) > THUMB_LIMIT:
             old, _ = self._loaded.popitem(last=False)
-            self.items.item(old).setIcon(QIcon())
+            self.items.item(old).setIcon(self._placeholder_icon)
 
     def _select_preview(self, index: int):
         self._preview_index = index

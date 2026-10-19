@@ -19,6 +19,7 @@ class EditWindow(MainWindow):
         self._gallery_files = []
         self._gallery_sources = []
         self._gallery = None
+        self._gallery_serial = 0
         self._save_request = None
         self._saved_snapshot: list[tuple[int, int]] | None = None
         super().__init__()
@@ -127,12 +128,17 @@ class EditWindow(MainWindow):
             return
         gallery = CropGallery(self._gallery_files, self._gallery_sources, self)
         self._gallery = gallery
+        self._gallery_serial += 1
+        serial = self._gallery_serial
         gallery.source_requested.connect(self._jump_to_source)
-        gallery.destroyed.connect(self._gallery_closed)
+        gallery.destroyed.connect(
+            lambda *_: self._gallery_closed(serial)
+        )
         gallery.show()
 
-    def _gallery_closed(self, *_):
-        self._gallery = None
+    def _gallery_closed(self, serial):
+        if serial == self._gallery_serial:
+            self._gallery = None
 
     def _jump_to_source(self, source_index):
         if self._session is None:
@@ -182,6 +188,9 @@ class EditWindow(MainWindow):
             if response.get("status") == "ok":
                 files = response.get("files", [])
                 if len(files) == len(self._roi_sources_pending):
+                    if self._gallery is not None:
+                        self._gallery.close()
+                        self._gallery = None
                     self._gallery_files = list(files)
                     self._gallery_sources = list(self._roi_sources_pending)
                 self.statusBar().showMessage(
