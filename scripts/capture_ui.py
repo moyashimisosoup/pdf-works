@@ -143,6 +143,8 @@ def capture(output: Path, pdf_path: Path) -> None:
         files.append(path)
     window._gallery_files = [str(p) for p in files]
     window._gallery_sources = list(range(40))
+    window._gallery_order = list(range(40))
+    window._gallery_excluded = set()
     window._show_roi_gallery()
     from PySide6.QtTest import QTest
     gallery = window._gallery
