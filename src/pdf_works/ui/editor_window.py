@@ -185,6 +185,8 @@ class EditWindow(MainWindow):
     def _setup_keyboard_shortcuts(self):
         self._shortcuts = []
         for sequence, parent, slot, context in (
+            ("Ctrl+Shift+A", self.page_list, self.page_list.clearSelection,
+             Qt.ShortcutContext.WidgetWithChildrenShortcut),
             ("Delete", self.page_list, lambda: self._edit(("delete",)),
              Qt.ShortcutContext.WidgetWithChildrenShortcut),
             ("Ctrl+Z", self, lambda: self._edit(("undo",)),

@@ -103,3 +103,19 @@ def test_navigation_buttons_replace_selection(editor):
     editor._select_page(4)
     assert editor._selected_rows() == [4]
     assert editor._current_page == 4
+
+
+def test_ctrl_shift_a_deselects_everything(editor):
+    page_list = editor.page_list
+    page_list.setFocus()
+    QTest.keyClick(page_list, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    QApplication.processEvents()
+    assert len(editor._selected_rows()) == 8
+    QTest.keyClick(
+        page_list, Qt.Key.Key_A,
+        Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
+    )
+    QApplication.processEvents()
+    assert editor._selected_rows() == []
+    assert not editor.extract_button.isEnabled()
+    assert not editor.split_button.isEnabled()
