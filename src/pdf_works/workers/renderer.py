@@ -100,6 +100,25 @@ def run_worker(requests: Any, results: Any) -> None:
                 from ..core.export import save_edited_pdf
                 count=save_edited_pdf(req["path"],req["destination"],req["pages"])
                 response.update(status="ok",count=count,destination=req["destination"])
+            elif op=="extract_selected":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.export import save_edited_pdf
+                count = save_edited_pdf(
+                    document.name, req["destination"], req["pages"],
+                )
+                response.update(status="ok", count=count,
+                                destination=req["destination"])
+            elif op=="split_selected":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.page_extract import split_selected_pdf
+                files = split_selected_pdf(
+                    document.name, req["destination_dir"],
+                    req["pages"], req["prefix"],
+                )
+                response.update(status="ok", count=len(files),
+                                files=[str(p) for p in files])
             elif op=="roi_export":
                 if document is None or req.get("generation")!=generation:
                     raise RuntimeError("PDF document is not open")
