@@ -168,6 +168,6 @@
 - [x] Qt画面の「容量を最適化」、実サイズと削減/増加結果の表示。未保存ページ編集がある場合は無効化
 - [x] 人工1/8/40ページ・しおり/注釈/リンク・レンダリング・失敗条件の自動テスト追加
 - [x] spawnワーカー試験とQt保存操作試験を追加
-- [ ] 最新コミットのWindows Qt・バックエンドCIの結果を確認
+- [x] [Backend CI #39413724878](https://github.com/moyashimisosoup/pdf-works/actions/runs/39413724878)と[Windows Qt CI #39413725210](https://github.com/moyashimisosoup/pdf-works/actions/runs/39413725210)成功（2026-10-20、人工PDF・Qtオフスクリーン）
 - [ ] 利用者Windows PCで40ページの実文書、文字検索、見た目、注釈の実機確認
 - [ ] 画質低下を伴う標準/容量優先モードは、まず保護対象・実測効果・比較UIを設計する
