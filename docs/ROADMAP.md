@@ -122,6 +122,6 @@
 - [x] spawn PDFワーカーで処理。元PDF・元PNGを変更せず、同名既存PDFの上書き防止
 - [x] 人工PNGで1/8/9/40件の自動改ページと保存検証（ローカルテスト5件成功）
 - [x] PDF GUI保存ボタンとクリックシグナルのQt自動テストを追加
-- [ ] 開発ブランチ最新コミットのバックエンド・Windows Qt CI成功を確認
+- [x] [Backend CI #39351025065](https://github.com/moyashimisosoup/pdf-works/actions/runs/39351025065)と[Windows Qt CI #39351025388](https://github.com/moyashimisosoup/pdf-works/actions/runs/39351025388)成功
 - [ ] Windows実機のフォルダ選択・保存・実PDF印刷プレビュー・40ページE2Eを確認
 - [ ] ギャラリー除外・並べ替え・ページ選択の標準Ctrl/Shift操作を次工程として実装
