@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QDialog, QFileDialog, QHBoxLayout,
     QLabel, QMessageBox, QPushButton, QListWidgetItem)
 from .main_window import MainWindow
 from .roi_gallery import CropGallery
+from .split_dialog import SplitGroupsDialog
 from ..core.page_edit import EditSession
 from ..core.page_extract import selected_page_specs
 
@@ -92,7 +93,12 @@ class EditWindow(MainWindow):
             "選択した各ページを個別PDFに保存します。元PDFは変更されません"
         )
         self.split_button.clicked.connect(self._split_selected)
-        for button in (self.extract_button, self.split_button):
+        self.groups_button = QPushButton("条件で分割")
+        self.groups_button.setToolTip(
+            "すべての編集中ページを指定位置・指定ページ数で分割します"
+        )
+        self.groups_button.clicked.connect(self._split_groups)
+        for button in (self.extract_button, self.split_button, self.groups_button):
             button.setMinimumWidth(button.sizeHint().width() + 16)
             actions.addWidget(button)
         self.export_info = QLabel("選択ページを別名保存")
@@ -181,6 +187,38 @@ class EditWindow(MainWindow):
         self._page_export_request = rid
         self._update_controls()
         self.statusBar().showMessage(f"{len(pages)}ページを分割中…")
+
+    def _split_groups(self):
+        if (self._session is None or not self._pdf_path or
+                self._page_output_busy() or len(self._session.pages) < 2):
+            return
+        snapshot = self._session.snapshot()
+        dialog = SplitGroupsDialog(snapshot, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        config = dialog.configuration
+        if not config:
+            return
+        folder = QFileDialog.getExistingDirectory(
+            self, "分割PDFの保存先フォルダ"
+        )
+        if not folder:
+            return
+        from ..core.page_partition import safe_output_prefix
+        prefix = safe_output_prefix(Path(self._pdf_path).stem)
+        rid = self._bridge.send(
+            "split_groups", generation=self._generation,
+            destination_dir=folder, pages=snapshot, prefix=prefix,
+            **config,
+        )
+        if rid is None:
+            QMessageBox.warning(self, "処理中", "PDFワーカーが混雑しています。")
+            return
+        self._page_exporting = True
+        self._page_export_operation = "split_groups"
+        self._page_export_request = rid
+        self._update_controls()
+        self.statusBar().showMessage("指定条件でPDFを分割中…")
 
     def _setup_keyboard_shortcuts(self):
         self._shortcuts = []
@@ -418,7 +456,7 @@ class EditWindow(MainWindow):
         if response.get("generation") != self._generation:
             return
         op = response.get("op")
-        if op in ("extract_selected", "split_selected"):
+        if op in ("extract_selected", "split_selected", "split_groups"):
             if (response.get("id") != self._page_export_request
                     or op != self._page_export_operation):
                 return
@@ -636,6 +674,7 @@ class EditWindow(MainWindow):
         self.save_button.setEnabled(ready)
         self.extract_button.setEnabled(ready and bool(rows))
         self.split_button.setEnabled(ready and bool(rows))
+        self.groups_button.setEnabled(ready and total > 1)
         self.open_button.setEnabled(ready or self._session is None)
         if hasattr(self, "roi_toggle"):
             self.roi_toggle.setEnabled(ready)
