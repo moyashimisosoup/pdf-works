@@ -55,6 +55,7 @@ class CropGallery(QDialog):
     """Standalone window with source-ID-safe jump and visible-only image loads."""
 
     source_requested = Signal(int)
+    pdf_requested = Signal()
 
     def __init__(self, image_files, source_ids, parent=None):
         super().__init__(parent)
@@ -92,6 +93,13 @@ class CropGallery(QDialog):
         self.size_combo.setCurrentIndex(1)
         self.size_combo.currentIndexChanged.connect(self._change_tile_size)
         header.addWidget(self.size_combo)
+        pdf_button = QPushButton("PDF保存")
+        pdf_button.setObjectName("primary")
+        pdf_button.setMinimumWidth(pdf_button.sizeHint().width() + 16)
+        pdf_button.setToolTip("A4縦・2列×4行の一覧PDFを新しいファイルに保存")
+        pdf_button.clicked.connect(self.pdf_requested.emit)
+        header.addWidget(pdf_button)
+        self.pdf_button = pdf_button
         close_button = QPushButton("閉じる")
         close_button.setMinimumWidth(close_button.sizeHint().width() + 16)
         close_button.clicked.connect(self.close)

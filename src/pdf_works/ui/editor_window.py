@@ -14,6 +14,8 @@ class EditWindow(MainWindow):
         self._edit_epoch = 0
         self._saving = False
         self._roi_exporting = False
+        self._sheet_exporting = False
+        self._sheet_request = None
         self._roi_request = None
         self._roi_sources_pending = []
         self._gallery_files = []
@@ -96,7 +98,7 @@ class EditWindow(MainWindow):
 
     def _export_roi(self):
         if (self._session is None or not self._pdf_path
-                or self._saving or self._roi_exporting):
+                or self._saving or self._roi_exporting or self._sheet_exporting):
             return
         roi = self.viewer.roi
         if roi is None:
@@ -118,6 +120,40 @@ class EditWindow(MainWindow):
         self._update_controls()
         self.statusBar().showMessage("PNGを出力中…")
 
+    def _export_sheet(self):
+        if (not self._gallery_files or not self._gallery_sources
+                or self._saving or self._roi_exporting or self._sheet_exporting):
+            return
+        src = Path(self._pdf_path) if self._pdf_path else None
+        suggested = str(src.with_name(src.stem + "_roi_sheet.pdf")) if src else "roi_sheet.pdf"
+        name, _ = QFileDialog.getSaveFileName(
+            self, "A4一覧PDFの保存", suggested, "PDF (*.pdf)"
+        )
+        if not name:
+            return
+        destination = Path(name)
+        if destination.suffix.lower() != ".pdf":
+            destination = destination.with_suffix(".pdf")
+        if destination.exists() or destination.is_symlink() or (
+            src is not None and destination.resolve() == src.resolve()
+        ):
+            QMessageBox.warning(
+                self, "保存先を確認", "元PDFや既存ファイルには上書きできません。"
+            )
+            return
+        request = self._bridge.send(
+            "roi_sheet_export", generation=self._generation,
+            destination=str(destination),
+            files=list(self._gallery_files), sources=list(self._gallery_sources),
+        )
+        if request is None:
+            QMessageBox.warning(self, "処理中", "PDFワーカーが混雑しています。")
+            return
+        self._sheet_request = request
+        self._sheet_exporting = True
+        self._update_controls()
+        self.statusBar().showMessage("A4一覧PDFを作成中…")
+
     def _show_roi_gallery(self):
         if not self._gallery_files or len(self._gallery_files) != len(self._gallery_sources):
             return
@@ -131,6 +167,7 @@ class EditWindow(MainWindow):
         self._gallery_serial += 1
         serial = self._gallery_serial
         gallery.source_requested.connect(self._jump_to_source)
+        gallery.pdf_requested.connect(self._export_sheet)
         gallery.destroyed.connect(
             lambda *_: self._gallery_closed(serial)
         )
@@ -156,7 +193,7 @@ class EditWindow(MainWindow):
         return self._session is not None and self._session.snapshot() != self._saved_snapshot
 
     def open_pdf(self, path):
-        if self._saving or self._roi_exporting:
+        if self._saving or self._roi_exporting or self._sheet_exporting:
             QMessageBox.information(self, "処理中", "書き出しが終わるまでお待ちください。")
             return
         if self._dirty() and QMessageBox.question(
@@ -180,6 +217,22 @@ class EditWindow(MainWindow):
         if response.get("generation") != self._generation:
             return
         op = response.get("op")
+        if op == "roi_sheet_export":
+            if response.get("id") != self._sheet_request:
+                return
+            self._sheet_request = None
+            self._sheet_exporting = False
+            if response.get("status") == "ok":
+                self.statusBar().showMessage(
+                    f"A4一覧PDFを保存しました（{response['count']}ページ）。"
+                )
+            else:
+                QMessageBox.warning(
+                    self, "一覧PDFを保存できませんでした",
+                    response.get("message", "原因不明のエラー"),
+                )
+            self._update_controls()
+            return
         if op == "roi_export":
             if response.get("id") != self._roi_request:
                 return
@@ -275,7 +328,7 @@ class EditWindow(MainWindow):
         self._update_controls()
 
     def _edit(self, action):
-        if self._session is None or self._saving or self._roi_exporting:
+        if self._session is None or self._saving or self._roi_exporting or self._sheet_exporting:
             return
         idx = self._current_page
         operation = action[0]
@@ -302,7 +355,8 @@ class EditWindow(MainWindow):
         super()._update_controls()
         if not hasattr(self, "_edit_buttons"):
             return
-        ready = self._session is not None and not self._saving and not self._roi_exporting
+        ready = (self._session is not None and not self._saving
+                 and not self._roi_exporting and not self._sheet_exporting)
         idx = self._current_page
         for key, button in self._edit_buttons.items():
             active = ready
@@ -312,7 +366,9 @@ class EditWindow(MainWindow):
             if key == "undo": active = ready and self._session.can_undo
             button.setEnabled(active)
         self.save_button.setEnabled(ready)
-        self.open_button.setEnabled(not self._saving and not self._roi_exporting)
+        self.open_button.setEnabled(
+            not self._saving and not self._roi_exporting and not self._sheet_exporting
+        )
         if hasattr(self, "roi_toggle"):
             self.roi_toggle.setEnabled(ready)
             self.roi_clear.setEnabled(ready and self.viewer.roi is not None)
@@ -320,7 +376,8 @@ class EditWindow(MainWindow):
             self.gallery_button.setEnabled(bool(self._gallery_files))
 
     def _save_as(self):
-        if self._session is None or self._saving or self._roi_exporting or not self._pdf_path:
+        if (self._session is None or self._saving or self._roi_exporting
+                or self._sheet_exporting or not self._pdf_path):
             return
         src = Path(self._pdf_path)
         proposal = str(src.with_name(src.stem + "_edited.pdf"))
@@ -345,7 +402,7 @@ class EditWindow(MainWindow):
         self.statusBar().showMessage("別名PDFを保存しています…")
 
     def closeEvent(self, event):
-        if self._saving or self._roi_exporting:
+        if self._saving or self._roi_exporting or self._sheet_exporting:
             QMessageBox.information(self, "処理中", "書き出し終了後に閉じてください。")
             event.ignore()
             return
