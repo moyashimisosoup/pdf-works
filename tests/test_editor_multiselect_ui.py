@@ -63,11 +63,13 @@ def test_ctrl_click_shift_range_and_one_undo(editor):
         Qt.KeyboardModifier.ShiftModifier, pos=row_position(editor, 3),
     )
     QApplication.processEvents()
-    assert editor._selected_rows() == [2, 3]
+    # Qt ExtendedSelection retains earlier Ctrl-selected pages here.
+    assert editor._selected_rows() == [0, 2, 3]
     editor._edit(("rotate", 90))
+    assert editor._session.pages[0].rotation_delta == 90
     assert editor._session.pages[2].rotation_delta == 90
     assert editor._session.pages[3].rotation_delta == 90
-    assert editor._selected_rows() == [2, 3]
+    assert editor._selected_rows() == [0, 2, 3]
     assert editor._session.can_undo
     editor._edit(("undo",))
     assert not editor._session.can_undo
