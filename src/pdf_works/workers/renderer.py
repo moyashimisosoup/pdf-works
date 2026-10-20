@@ -103,6 +103,15 @@ def run_worker(requests: Any, results: Any) -> None:
                 from ..core.export import save_edited_pdf
                 count=save_edited_pdf(req["path"],req["destination"],req["pages"])
                 response.update(status="ok",count=count,destination=req["destination"])
+            elif op=="optimize_lossless":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.optimize import optimize_pdf_lossless
+                details = optimize_pdf_lossless(
+                    document.name, req["destination"],
+                )
+                response.update(status="ok", destination=req["destination"],
+                                **details)
             elif op=="extract_selected":
                 if document is None or req.get("generation") != generation:
                     raise RuntimeError("PDF document is not open")
