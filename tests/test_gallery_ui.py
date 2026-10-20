@@ -94,3 +94,65 @@ def test_gallery_pdf_button_requests_save(app, gallery_files):
     assert spy.count() == 1
     gallery.close()
     app.processEvents()
+
+
+def test_gallery_order_exclusion_and_restore_are_reversible(app, gallery_files):
+    gallery = CropGallery(gallery_files[:4], [10, 11, 12, 13])
+    spy = QSignalSpy(gallery.layout_changed)
+    gallery.show()
+    app.processEvents()
+    gallery.items.setCurrentRow(1)
+    gallery.up_button.click()
+    files, sources = gallery.export_entries()
+    assert sources == [11, 10, 12, 13]
+    assert files[0] == str(gallery_files[1])
+    assert gallery.items.item(0).data(Qt.ItemDataRole.UserRole) == 1
+    gallery.exclude_button.click()
+    files, sources = gallery.export_entries()
+    assert sources == [10, 12, 13]
+    assert "除外" in gallery.items.item(0).text()
+    assert spy.count() == 2
+    assert spy.at(1)[0] == [1, 0, 2, 3]
+    assert spy.at(1)[1] == [1]
+    gallery.items.setCurrentRow(1)
+    gallery.down_button.click()
+    assert gallery.export_entries()[1] == [12, 10, 13]
+    gallery.restore_button.click()
+    assert gallery.export_entries()[1] == [11, 12, 10, 13]
+    assert gallery.pdf_button.isEnabled()
+    gallery.close()
+    app.processEvents()
+
+
+def test_all_excluded_disables_pdf_but_can_restore(app, gallery_files):
+    gallery = CropGallery(gallery_files[:2], [3, 9])
+    gallery.show()
+    app.processEvents()
+    gallery.items.setCurrentRow(0)
+    gallery.exclude_button.click()
+    gallery.items.setCurrentRow(1)
+    gallery.exclude_button.click()
+    assert gallery.export_entries() == ([], [])
+    assert not gallery.pdf_button.isEnabled()
+    gallery.restore_button.click()
+    assert gallery.export_entries()[1] == [3, 9]
+    assert gallery.pdf_button.isEnabled()
+    gallery.close()
+    app.processEvents()
+
+
+def test_reopened_gallery_recovers_order_and_exclusions(app, gallery_files):
+    gallery = CropGallery(
+        gallery_files[:3], [7, 4, 8],
+        order=[2, 0, 1], excluded=[0],
+    )
+    gallery.show()
+    app.processEvents()
+    assert gallery.export_entries()[1] == [8, 4]
+    assert "除外" in gallery.items.item(1).text()
+    gallery.items.setCurrentRow(0)
+    spy = QSignalSpy(gallery.source_requested)
+    gallery.items.itemDoubleClicked.emit(gallery.items.item(0))
+    assert spy.count() == 1 and spy.at(0)[0] == 8
+    gallery.close()
+    app.processEvents()
