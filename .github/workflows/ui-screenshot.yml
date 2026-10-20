@@ -38,6 +38,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/test_gallery_ui.py -q
+      - name: Test Ctrl Shift page selection and batch editing
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_editor_multiselect_ui.py -q
       - name: Capture Windows Qt widget pixels
         env:
           QT_QPA_PLATFORM: offscreen

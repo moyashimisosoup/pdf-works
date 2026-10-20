@@ -91,6 +91,23 @@ def capture(output: Path, pdf_path: Path) -> None:
         raise RuntimeError("ROI selection was not visible")
     window.roi_toggle.setChecked(False)
 
+    # Multi-page Qt list selection: keep current page and selected set distinct.
+    from PySide6.QtCore import QItemSelectionModel
+    window.page_list.setCurrentRow(
+        0, QItemSelectionModel.SelectionFlag.ClearAndSelect
+    )
+    window.page_list.item(2).setSelected(True)
+    app.processEvents()
+    if window._selected_rows() != [0, 2]:
+        raise RuntimeError("Extended selection does not preserve two pages")
+    selected_capture = output / "pdf-works-qt-multi-selection.png"
+    if not window.grab().save(str(selected_capture)):
+        raise RuntimeError("Failed to capture multi-page selection")
+    window.page_list.setCurrentRow(
+        0, QItemSelectionModel.SelectionFlag.ClearAndSelect
+    )
+    app.processEvents()
+
     # The combobox popup is a separate top-level Qt window. Grab that window,
     # otherwise the main-window capture would not include the expanded choices.
     dropdown_path = output / "pdf-works-qt-dropdown-open.png"
@@ -151,7 +168,8 @@ def capture(output: Path, pdf_path: Path) -> None:
     app.processEvents()
 
     print(f"Qt application client area and dropdown captured on {sys.platform}:")
-    for f in (regular, pressed, roi_screenshot, dropdown_path, gallery_capture):
+    for f in (regular, pressed, roi_screenshot, selected_capture,
+              dropdown_path, gallery_capture):
         print(f"  {f} ({f.stat().st_size} bytes)")
     window.close()
 
