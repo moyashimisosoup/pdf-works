@@ -10,6 +10,7 @@ from .roi_gallery import CropGallery
 from .split_dialog import SplitGroupsDialog
 from ..core.page_edit import EditSession
 from ..core.page_extract import selected_page_specs
+from ..core.file_size import format_file_size
 
 
 class EditWindow(MainWindow):
@@ -23,6 +24,8 @@ class EditWindow(MainWindow):
         self._page_exporting = False
         self._page_export_request = None
         self._page_export_operation = None
+        self._optimizing = False
+        self._optimize_request = None
         self._sheet_request = None
         self._roi_request = None
         self._roi_sources_pending = []
@@ -77,6 +80,7 @@ class EditWindow(MainWindow):
         self.centralWidget().layout().itemAt(0).layout().insertWidget(2, self.save_button)
         self._setup_roi_tools()
         self._setup_page_export_tools()
+        self._setup_optimization_tools()
         self._setup_keyboard_shortcuts()
         self._update_controls()
 
@@ -108,6 +112,64 @@ class EditWindow(MainWindow):
         actions.addStretch(1)
         self.centralWidget().layout().insertLayout(4, actions)
 
+    def _setup_optimization_tools(self):
+        bar = QHBoxLayout()
+        bar.setSpacing(8)
+        self.optimize_button = QPushButton("容量を最適化")
+        self.optimize_button.setMinimumWidth(
+            self.optimize_button.sizeHint().width() + 16
+        )
+        self.optimize_button.setToolTip(
+            "元PDFを品質維持で新規保存します。未保存のページ編集は対象外です。"
+        )
+        self.optimize_button.clicked.connect(self._optimize_source)
+        bar.addWidget(self.optimize_button)
+        info = QLabel("品質維持：文字やページを画像化しません")
+        info.setWordWrap(False)
+        info.setStyleSheet("color:#726A95;")
+        bar.addWidget(info)
+        bar.addStretch(1)
+        self.centralWidget().layout().insertLayout(5, bar)
+
+    def _optimize_source(self):
+        if self._session is None or not self._pdf_path or self._page_output_busy():
+            return
+        if self._dirty():
+            QMessageBox.information(
+                self, "未保存の編集",
+                "先に編集結果を別名保存し、そのPDFを開いてください。"
+                "容量の最適化は現在開いている元PDFだけを対象にします。",
+            )
+            return
+        source = Path(self._pdf_path)
+        proposal = source.with_name(source.stem + "_optimized.pdf")
+        name, _ = QFileDialog.getSaveFileName(
+            self, "品質維持でPDFを最適化", str(proposal), "PDF (*.pdf)"
+        )
+        if not name:
+            return
+        target = Path(name)
+        if target.suffix.lower() != ".pdf":
+            target = target.with_suffix(".pdf")
+        if (target.exists() or target.is_symlink()
+                or target.resolve() == source.resolve()):
+            QMessageBox.warning(
+                self, "保存先を確認",
+                "元PDFや既存ファイルには上書きできません。",
+            )
+            return
+        rid = self._bridge.send(
+            "optimize_lossless", generation=self._generation,
+            destination=str(target),
+        )
+        if rid is None:
+            QMessageBox.warning(self, "処理中", "PDFワーカーが混雑しています。")
+            return
+        self._optimizing = True
+        self._optimize_request = rid
+        self._update_controls()
+        self.statusBar().showMessage("PDFの品質維持最適化と再検証を実行中…")
+
     def _selected_specs(self):
         if self._session is None:
             return []
@@ -118,7 +180,8 @@ class EditWindow(MainWindow):
 
     def _page_output_busy(self):
         return (self._saving or self._roi_exporting
-                or self._sheet_exporting or self._page_exporting)
+                or self._sheet_exporting or self._page_exporting
+                or self._optimizing)
 
     def _extract_selected(self):
         if self._session is None or not self._pdf_path or self._page_output_busy():
@@ -456,6 +519,33 @@ class EditWindow(MainWindow):
         if response.get("generation") != self._generation:
             return
         op = response.get("op")
+        if op == "optimize_lossless":
+            if response.get("id") != self._optimize_request:
+                return
+            self._optimize_request = None
+            self._optimizing = False
+            if response.get("status") == "ok":
+                previous = response["before_bytes"]
+                current = response["after_bytes"]
+                diff = current - previous
+                if diff < 0:
+                    ratio = 100.0 * (-diff) / max(previous, 1)
+                    change = f"{ratio:.1f}%削減"
+                elif diff > 0:
+                    change = "容量増加（品質維持を優先）"
+                else:
+                    change = "容量は変化なし"
+                self.statusBar().showMessage(
+                    f"保存済み：{format_file_size(previous)} → "
+                    f"{format_file_size(current)}（{change}）"
+                )
+            else:
+                QMessageBox.warning(
+                    self, "容量を最適化できませんでした",
+                    response.get("message", "原因不明のエラー"),
+                )
+            self._update_controls()
+            return
         if op in ("extract_selected", "split_selected", "split_groups"):
             if (response.get("id") != self._page_export_request
                     or op != self._page_export_operation):
@@ -675,6 +765,9 @@ class EditWindow(MainWindow):
         self.extract_button.setEnabled(ready and bool(rows))
         self.split_button.setEnabled(ready and bool(rows))
         self.groups_button.setEnabled(ready and total > 1)
+        self.optimize_button.setEnabled(
+            ready and bool(self._pdf_path) and not self._dirty()
+        )
         self.open_button.setEnabled(ready or self._session is None)
         if hasattr(self, "roi_toggle"):
             self.roi_toggle.setEnabled(ready)
