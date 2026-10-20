@@ -56,13 +56,21 @@ class CropGallery(QDialog):
 
     source_requested = Signal(int)
     pdf_requested = Signal()
+    layout_changed = Signal(list, list)
 
-    def __init__(self, image_files, source_ids, parent=None):
+    def __init__(self, image_files, source_ids, parent=None, *, order=None, excluded=None):
         super().__init__(parent)
         if not image_files or len(image_files) != len(source_ids):
             raise ValueError("A gallery requires a file and source page for each entry")
         self._paths = [Path(p) for p in image_files]
         self._sources = list(source_ids)
+        count = len(self._paths)
+        self._order = list(range(count)) if order is None else list(order)
+        self._excluded = set() if excluded is None else set(excluded)
+        if (len(self._order) != count or set(self._order) != set(range(count))
+                or len(set(self._order)) != count
+                or not self._excluded.issubset(set(range(count)))):
+            raise ValueError("Invalid gallery order or excluded image IDs")
         self._loaded = OrderedDict()
         self._pending = {}
         self._preview_index = -1
@@ -105,6 +113,24 @@ class CropGallery(QDialog):
         close_button.clicked.connect(self.close)
         header.addWidget(close_button)
         root.addLayout(header)
+        operations = QHBoxLayout()
+        operations.setSpacing(6)
+        self.up_button = QPushButton("前へ")
+        self.down_button = QPushButton("後へ")
+        self.exclude_button = QPushButton("除外")
+        self.restore_button = QPushButton("全件復元")
+        self.counter = QLabel("")
+        self.counter.setWordWrap(False)
+        for button in (self.up_button, self.down_button,
+                       self.exclude_button, self.restore_button):
+            button.setMinimumWidth(button.sizeHint().width() + 12)
+            operations.addWidget(button)
+        operations.addWidget(self.counter, 1)
+        root.addLayout(operations)
+        self.up_button.clicked.connect(lambda: self._move_item(-1))
+        self.down_button.clicked.connect(lambda: self._move_item(1))
+        self.exclude_button.clicked.connect(self._toggle_excluded)
+        self.restore_button.clicked.connect(self._restore_all)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self.items = QListWidget()
@@ -118,9 +144,9 @@ class CropGallery(QDialog):
         self.items.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
         self.items.setSelectionMode(QListView.SelectionMode.SingleSelection)
         self._placeholder_icon = self._make_placeholder()
-        for idx, source in enumerate(self._sources):
-            item = QListWidgetItem(f"{idx+1} · 元{source+1}")
-            item.setData(Qt.ItemDataRole.UserRole, source)
+        for uid in self._order:
+            item = QListWidgetItem("")
+            item.setData(Qt.ItemDataRole.UserRole, uid)
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             item.setIcon(self._placeholder_icon)
             item.setSizeHint(QSize(180, 160))
@@ -151,10 +177,77 @@ class CropGallery(QDialog):
         self.items.verticalScrollBar().valueChanged.connect(self._schedule_visible)
         self.items.currentRowChanged.connect(self._select_preview)
         self.items.itemDoubleClicked.connect(
-            lambda item: self.source_requested.emit(item.data(Qt.ItemDataRole.UserRole))
+            lambda item: self.source_requested.emit(
+                self._sources[item.data(Qt.ItemDataRole.UserRole)]
+            )
         )
+        self.items.currentRowChanged.connect(self._update_action_buttons)
+        self._renumber()
         self._change_tile_size()
         self.items.setCurrentRow(0)
+        self._update_action_buttons()
+
+    def _renumber(self):
+        for row in range(self.items.count()):
+            item = self.items.item(row)
+            uid = item.data(Qt.ItemDataRole.UserRole)
+            mark = "［除外］" if uid in self._excluded else ""
+            item.setText(f"{row+1} · 元{self._sources[uid]+1}{mark}")
+            item.setForeground(QColor("#A49BA8" if uid in self._excluded else "#351F39"))
+        active = self.items.count() - len(self._excluded)
+        self.counter.setText(f"PDF対象 {active}/{self.items.count()}")
+        self.pdf_button.setEnabled(active > 0)
+        self.restore_button.setEnabled(bool(self._excluded))
+
+    def _update_action_buttons(self, *_):
+        row = self.items.currentRow()
+        valid = 0 <= row < self.items.count()
+        self.up_button.setEnabled(valid and row > 0)
+        self.down_button.setEnabled(valid and row < self.items.count()-1)
+        self.exclude_button.setEnabled(valid)
+        if valid:
+            uid = self.items.item(row).data(Qt.ItemDataRole.UserRole)
+            self.exclude_button.setText("復元" if uid in self._excluded else "除外")
+
+    def _changed(self):
+        self._order = [self.items.item(i).data(Qt.ItemDataRole.UserRole)
+                       for i in range(self.items.count())]
+        self._renumber()
+        self._update_action_buttons()
+        self.layout_changed.emit(list(self._order), sorted(self._excluded))
+        self._schedule_visible()
+
+    def export_entries(self):
+        """Only included files, in the user's displayed order."""
+        ids = [uid for uid in self._order if uid not in self._excluded]
+        return ([str(self._paths[uid]) for uid in ids],
+                [self._sources[uid] for uid in ids])
+
+    def _move_item(self, delta: int):
+        row = self.items.currentRow()
+        target = row + delta
+        if row < 0 or not 0 <= target < self.items.count():
+            return
+        item = self.items.takeItem(row)
+        self.items.insertItem(target, item)
+        self.items.setCurrentRow(target)
+        self._changed()
+
+    def _toggle_excluded(self):
+        row = self.items.currentRow()
+        if row < 0:
+            return
+        uid = self.items.item(row).data(Qt.ItemDataRole.UserRole)
+        if uid in self._excluded:
+            self._excluded.remove(uid)
+        else:
+            self._excluded.add(uid)
+        self._changed()
+
+    def _restore_all(self):
+        if self._excluded:
+            self._excluded.clear()
+            self._changed()
 
     @staticmethod
     def _make_placeholder():
@@ -203,13 +296,14 @@ class CropGallery(QDialog):
         if self._preview_index >= 0:
             self._schedule_read(self._preview_index, "preview", QSize(780, 660))
         viewport = self.items.viewport().rect()
-        for idx in range(self.items.count()):
-            item = self.items.item(idx)
+        for row in range(self.items.count()):
+            item = self.items.item(row)
             if not self.items.visualItemRect(item).intersects(viewport):
                 continue
-            if idx in self._loaded:
+            uid = item.data(Qt.ItemDataRole.UserRole)
+            if uid in self._loaded:
                 continue
-            self._schedule_read(idx, "thumb", QSize(184, 152))
+            self._schedule_read(uid, "thumb", QSize(184, 152))
 
     def _schedule_read(self, index: int, kind: str, size: QSize):
         key = (index, kind)
@@ -238,18 +332,28 @@ class CropGallery(QDialog):
             return
         self._loaded[index] = True
         self._loaded.move_to_end(index)
-        self.items.item(index).setIcon(QIcon(QPixmap.fromImage(image)))
+        for row in range(self.items.count()):
+            item = self.items.item(row)
+            if item.data(Qt.ItemDataRole.UserRole) == index:
+                item.setIcon(QIcon(QPixmap.fromImage(image)))
+                break
         while len(self._loaded) > THUMB_LIMIT:
             old, _ = self._loaded.popitem(last=False)
-            self.items.item(old).setIcon(self._placeholder_icon)
+            for row in range(self.items.count()):
+                item = self.items.item(row)
+                if item.data(Qt.ItemDataRole.UserRole) == old:
+                    item.setIcon(self._placeholder_icon)
+                    break
 
     def _select_preview(self, index: int):
-        self._preview_index = index
+        uid = (self.items.item(index).data(Qt.ItemDataRole.UserRole)
+               if 0 <= index < self.items.count() else -1)
+        self._preview_index = uid
         self._preview_image = QImage()
         self.preview.clear()
         if index < 0:
             return
         self.preview.setText("読み込み中…")
-        self.details.setText(f"{index+1}番目 · 元{self._sources[index]+1}ページ")
-        self._schedule_read(index, "preview", QSize(780, 660))
+        self.details.setText(f"{index+1}番目 · 元{self._sources[uid]+1}ページ")
+        self._schedule_read(uid, "preview", QSize(780, 660))
         self._schedule_visible()
