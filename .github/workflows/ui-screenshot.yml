@@ -50,6 +50,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/test_split_dialog_ui.py tests/test_split_groups_ui.py -q
+      - name: Test lossless compression GUI and byte-size result
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_optimize_ui.py -q
       - name: Capture Windows Qt widget pixels
         env:
           QT_QPA_PLATFORM: offscreen
