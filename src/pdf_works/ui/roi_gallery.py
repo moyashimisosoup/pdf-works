@@ -97,7 +97,7 @@ class CropGallery(QDialog):
         pdf_button.setObjectName("primary")
         pdf_button.setMinimumWidth(pdf_button.sizeHint().width() + 16)
         pdf_button.setToolTip("A4縦・2列×4行の一覧PDFを新しいファイルに保存")
-        pdf_button.clicked.connect(self.pdf_requested.emit)
+        pdf_button.clicked.connect(lambda checked=False: self.pdf_requested.emit())
         header.addWidget(pdf_button)
         self.pdf_button = pdf_button
         close_button = QPushButton("閉じる")

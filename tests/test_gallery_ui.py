@@ -82,3 +82,15 @@ def test_gallery_rejects_bad_lengths(app, gallery_files):
         CropGallery([], [])
     with pytest.raises(ValueError):
         CropGallery(gallery_files, [0])
+
+
+def test_gallery_pdf_button_requests_save(app, gallery_files):
+    gallery = CropGallery(gallery_files[:2], [7, 3])
+    gallery.show()
+    app.processEvents()
+    spy = QSignalSpy(gallery.pdf_requested)
+    gallery.pdf_button.click()
+    app.processEvents()
+    assert spy.count() == 1
+    gallery.close()
+    app.processEvents()
