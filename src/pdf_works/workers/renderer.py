@@ -82,7 +82,10 @@ def run_worker(requests: Any, results: Any) -> None:
                 if not document.is_pdf:
                     raise ValueError("PDFを選択してください")
                 original_rotations=[p.rotation for p in document]
-                response.update(status="ok",sizes=page_metadata(document),count=len(document))
+                import os
+                response.update(status="ok",sizes=page_metadata(document),
+                                count=len(document),
+                                file_bytes=os.path.getsize(document.name))
             elif op in ("render","thumb"):
                 if document is None or req.get("generation")!=generation:
                     continue

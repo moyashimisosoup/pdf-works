@@ -13,6 +13,7 @@ from .theme import COMBO_STYLE
 from .widgets.combo_box import SoftComboBox
 from .typography import PRESETS, font_for_preset, font_status
 from ..workers.bridge import PdfBridge
+from ..core.file_size import format_file_size
 
 STYLE="""
 QMainWindow,QWidget {background:#FCFBF7;color:#351F39;}
@@ -72,6 +73,10 @@ class MainWindow(QMainWindow):
         self.filename=QLabel("PDFを開いてください")
         self.filename.setStyleSheet("color:#726A95")
         header.addWidget(self.filename,stretch=1)
+        self.size_label=QLabel("")
+        self.size_label.setWordWrap(False)
+        self.size_label.setStyleSheet("color:#726A95;")
+        header.addWidget(self.size_label)
         self.open_button=QPushButton("開く")
         self.open_button.setObjectName("primary")
         self.open_button.clicked.connect(self._choose_pdf)
@@ -197,6 +202,7 @@ class MainWindow(QMainWindow):
         self.page_list.blockSignals(False)
         self.viewer.reset_document()
         self.filename.setText(Path(path).name)
+        self.size_label.setText("")
         self.statusBar().showMessage("PDFを読み込み中…")
         self._bridge.send("open",path=path,generation=self._generation)
 
@@ -213,6 +219,12 @@ class MainWindow(QMainWindow):
             else: self.statusBar().showMessage("PDF描画に失敗しました。")
             return
         if op=="open":
+            file_bytes=response.get("file_bytes")
+            if type(file_bytes) is int and file_bytes >= 0:
+                self.size_label.setText(format_file_size(file_bytes))
+                self.size_label.setToolTip(
+                    f"元PDFの実際のファイル容量：{file_bytes:,} bytes"
+                )
             self._sizes=[tuple(p) for p in response["sizes"]]
             self.page_list.blockSignals(True)
             for i in range(len(self._sizes)):
