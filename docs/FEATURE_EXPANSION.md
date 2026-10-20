@@ -1,5 +1,5 @@
 # PDF Works: 追加機能の統合計画
-2026-10-20追補。構想と実装を分離。**選択ページ抽出・1ページ単位分割はbetaに実装**。圧縮・文字入れ、境界/ページ数指定分割は未実装。利用者Windows PCの実機検証は未完了。
+2026-10-20追補。構想と実装を分離。**選択ページ抽出・1ページ単位分割はbetaに実装**。圧縮・文字入れは未実装。指定位置・指定ページ数での分割と元PDF実容量表示をbetaに実装し、CI成功。利用者Windows PCの実機検証は未完了。
 
 ## 開発の二本立て
 - 正本のデスクトップ製品：Windows PySide6/Qt + PyMuPDF。既存PDFワーカー・非破壊保存を再利用し、WebView2へ戻さない。
@@ -26,3 +26,5 @@
 
 根拠： [Draft PR #1](https://github.com/moyashimisosoup/pdf-works/pull/1) ／ [Qt UI設計](UI_DESIGN.md)。
 比較結果：[PDF編集アプリ比較](COMPETITOR_UX_REVIEW.md)／[抽出・分割の内部仕様](EXTRACT_SPLIT.md)。
+
+次の品質検証： [容量・圧縮計画](COMPRESSION_PLAN.md) ／ [条件指定分割](SPLIT_GROUPS.md)。
