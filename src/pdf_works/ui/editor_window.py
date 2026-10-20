@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout,
 from .main_window import MainWindow
 from .roi_gallery import CropGallery
 from ..core.page_edit import EditSession
+from ..core.page_extract import selected_page_specs
 
 
 class EditWindow(MainWindow):
@@ -18,6 +19,9 @@ class EditWindow(MainWindow):
         self._saving = False
         self._roi_exporting = False
         self._sheet_exporting = False
+        self._page_exporting = False
+        self._page_export_request = None
+        self._page_export_operation = None
         self._sheet_request = None
         self._roi_request = None
         self._roi_sources_pending = []
@@ -71,8 +75,112 @@ class EditWindow(MainWindow):
         self.save_button.clicked.connect(self._save_as)
         self.centralWidget().layout().itemAt(0).layout().insertWidget(2, self.save_button)
         self._setup_roi_tools()
+        self._setup_page_export_tools()
         self._setup_keyboard_shortcuts()
         self._update_controls()
+
+    def _setup_page_export_tools(self):
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        self.extract_button = QPushButton("選択を抽出")
+        self.extract_button.setToolTip(
+            "選択したページだけを編集後の順序で別のPDFに保存します"
+        )
+        self.extract_button.clicked.connect(self._extract_selected)
+        self.split_button = QPushButton("1ページずつ分割")
+        self.split_button.setToolTip(
+            "選択した各ページを個別PDFに保存します。元PDFは変更されません"
+        )
+        self.split_button.clicked.connect(self._split_selected)
+        for button in (self.extract_button, self.split_button):
+            button.setMinimumWidth(button.sizeHint().width() + 16)
+            actions.addWidget(button)
+        self.export_info = QLabel("選択ページを別名保存")
+        self.export_info.setWordWrap(False)
+        self.export_info.setStyleSheet("color: #726A95;")
+        actions.addWidget(self.export_info)
+        actions.addStretch(1)
+        self.centralWidget().layout().insertLayout(4, actions)
+
+    def _selected_specs(self):
+        if self._session is None:
+            return []
+        rows = self._selected_rows()
+        if not rows:
+            return []
+        return selected_page_specs(self._session.snapshot(), rows)
+
+    def _page_output_busy(self):
+        return (self._saving or self._roi_exporting
+                or self._sheet_exporting or self._page_exporting)
+
+    def _extract_selected(self):
+        if self._session is None or not self._pdf_path or self._page_output_busy():
+            return
+        pages = self._selected_specs()
+        if not pages:
+            return
+        source = Path(self._pdf_path)
+        suggestion = source.with_name(source.stem + "_selected.pdf")
+        name, _ = QFileDialog.getSaveFileName(
+            self, "選択ページを抽出", str(suggestion), "PDF (*.pdf)",
+        )
+        if not name:
+            return
+        target = Path(name)
+        if target.suffix.lower() != ".pdf":
+            target = target.with_suffix(".pdf")
+        if target.exists() or target.is_symlink() or target.resolve() == source.resolve():
+            QMessageBox.warning(
+                self, "保存先を確認",
+                "元PDFや既存ファイルには上書きできません。",
+            )
+            return
+        rid = self._bridge.send(
+            "extract_selected", generation=self._generation,
+            destination=str(target), pages=pages,
+        )
+        if rid is None:
+            QMessageBox.warning(self, "処理中", "PDFワーカーが混雑しています。")
+            return
+        self._page_exporting = True
+        self._page_export_operation = "extract_selected"
+        self._page_export_request = rid
+        self._update_controls()
+        self.statusBar().showMessage(f"{len(pages)}ページを抽出中…")
+
+    def _split_selected(self):
+        if self._session is None or not self._pdf_path or self._page_output_busy():
+            return
+        pages = self._selected_specs()
+        if not pages:
+            return
+        folder = QFileDialog.getExistingDirectory(
+            self, "分割PDFの保存先フォルダ",
+        )
+        if not folder:
+            return
+        answer = QMessageBox.question(
+            self, "PDFを分割",
+            f"選択中の{len(pages)}ページを、各1ページの別PDFに保存しますか？"
+            "（元PDFは変更されません）",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        prefix = Path(self._pdf_path).stem[:48].strip(" .") + "_page"
+        rid = self._bridge.send(
+            "split_selected", generation=self._generation,
+            destination_dir=folder, pages=pages, prefix=prefix,
+        )
+        if rid is None:
+            QMessageBox.warning(self, "処理中", "PDFワーカーが混雑しています。")
+            return
+        self._page_exporting = True
+        self._page_export_operation = "split_selected"
+        self._page_export_request = rid
+        self._update_controls()
+        self.statusBar().showMessage(f"{len(pages)}ページを分割中…")
 
     def _setup_keyboard_shortcuts(self):
         self._shortcuts = []
@@ -165,7 +273,8 @@ class EditWindow(MainWindow):
 
     def _export_roi(self):
         if (self._session is None or not self._pdf_path
-                or self._saving or self._roi_exporting or self._sheet_exporting):
+                or self._saving or self._roi_exporting or self._sheet_exporting
+                or self._page_exporting):
             return
         roi = self.viewer.roi
         if roi is None:
@@ -199,7 +308,8 @@ class EditWindow(MainWindow):
 
     def _export_sheet(self):
         if (not self._gallery_files or not self._gallery_sources
-                or self._saving or self._roi_exporting or self._sheet_exporting):
+                or self._saving or self._roi_exporting or self._sheet_exporting
+                or self._page_exporting):
             return
         images, sources = self._sheet_entries()
         if not images:
@@ -280,7 +390,7 @@ class EditWindow(MainWindow):
         return self._session is not None and self._session.snapshot() != self._saved_snapshot
 
     def open_pdf(self, path):
-        if self._saving or self._roi_exporting or self._sheet_exporting:
+        if self._page_output_busy():
             QMessageBox.information(self, "処理中", "書き出しが終わるまでお待ちください。")
             return
         if self._dirty() and QMessageBox.question(
@@ -306,6 +416,25 @@ class EditWindow(MainWindow):
         if response.get("generation") != self._generation:
             return
         op = response.get("op")
+        if op in ("extract_selected", "split_selected"):
+            if (response.get("id") != self._page_export_request
+                    or op != self._page_export_operation):
+                return
+            self._page_exporting = False
+            self._page_export_request = None
+            self._page_export_operation = None
+            if response.get("status") == "ok":
+                done = response.get("count", 0)
+                result = ("抽出PDFを保存しました" if op == "extract_selected"
+                          else "分割PDFを保存しました")
+                self.statusBar().showMessage(f"{result}（{done}件）。")
+            else:
+                QMessageBox.warning(
+                    self, "PDFを書き出せませんでした",
+                    response.get("message", "原因不明のエラー"),
+                )
+            self._update_controls()
+            return
         if op == "roi_sheet_export":
             if response.get("id") != self._sheet_request:
                 return
@@ -436,8 +565,7 @@ class EditWindow(MainWindow):
         self._update_controls()
 
     def _edit(self, action):
-        if (self._session is None or self._saving
-                or self._roi_exporting or self._sheet_exporting):
+        if self._session is None or self._page_output_busy():
             return
         operation = action[0]
         rows = self._selected_rows()
@@ -487,8 +615,7 @@ class EditWindow(MainWindow):
         super()._update_controls()
         if not hasattr(self, "_edit_buttons"):
             return
-        ready = (self._session is not None and not self._saving
-                 and not self._roi_exporting and not self._sheet_exporting)
+        ready = self._session is not None and not self._page_output_busy()
         rows = self._selected_rows() if ready else []
         total = len(self._session.pages) if self._session else 0
         self.selection_label.setText(f"選択 {len(rows)}/{total} ページ")
@@ -505,6 +632,8 @@ class EditWindow(MainWindow):
                 active = ready and self._session.can_undo
             button.setEnabled(active)
         self.save_button.setEnabled(ready)
+        self.extract_button.setEnabled(ready and bool(rows))
+        self.split_button.setEnabled(ready and bool(rows))
         self.open_button.setEnabled(ready or self._session is None)
         if hasattr(self, "roi_toggle"):
             self.roi_toggle.setEnabled(ready)
@@ -513,8 +642,8 @@ class EditWindow(MainWindow):
             self.gallery_button.setEnabled(bool(self._gallery_files))
 
     def _save_as(self):
-        if (self._session is None or self._saving or self._roi_exporting
-                or self._sheet_exporting or not self._pdf_path):
+        if (self._session is None or self._page_output_busy()
+                or not self._pdf_path):
             return
         src = Path(self._pdf_path)
         proposal = str(src.with_name(src.stem + "_edited.pdf"))
@@ -539,7 +668,7 @@ class EditWindow(MainWindow):
         self.statusBar().showMessage("別名PDFを保存しています…")
 
     def closeEvent(self, event):
-        if self._saving or self._roi_exporting or self._sheet_exporting:
+        if self._page_output_busy():
             QMessageBox.information(self, "処理中", "書き出し終了後に閉じてください。")
             event.ignore()
             return
