@@ -78,7 +78,7 @@
 - [x] HTML UI試作（人工24ページ・スマホ対応・Ctrl/Shift/タッチ複数選択）を会話添付で作成。**GitHubへHTML本体は未保存**
 - [x] [HTML試作の位置付け](HTML_COMPANION.md)・[キーボード仕様](KEYBOARD_SHORTCUTS.md)・[機能統合計画](FEATURE_EXPANSION.md)を文書化
 - [ ] 実際のHTMLをリポジトリに格納する（UIレビュー後）
-- [ ] Qt beta実機確認後、Ctrl/Shift複数選択をQtに実装
+- [x] QtでCtrl/Shift・Ctrl+A複数選択を実装（CI結果と利用者PC実機確認は別ゲート）
 - [ ] 共通ROI切り出しと、選択ページ抽出・分割
 - [ ] ファイルサイズ実測、品質別圧縮
 - [ ] 日本語テキスト注記の非破壊配置
@@ -112,7 +112,7 @@
 - [x] Qt Fusion + Soft Outlineでドロップダウン/立体ボタン/未読込時プレースホルダーを統一
 - [x] [Windows Qt UIの一覧・ROIスクショと自動テスト](https://github.com/moyashimisosoup/pdf-works/actions/runs/39239557566) 成功（人工画像、利用者PCの実機操作とは区別）
 - [ ] 最新プレースホルダー改良後のWindows CIを確認し、必要なら修正
-- [ ] UI上の画像除外・ソート／再出力、A4 2列×4行の一覧PDF
+- [x] ギャラリーの画像除外・復元・上下移動を実装。A4 2列×4行PDFへ選択内容を反映（ドラッグ並べ替えは未実装、Windows操作CI待ち）
 - [ ] Windows実機で40ページ文書のROI→PNG出力→一覧→元ページ移動のE2E確認
 
 ## 2026-10-20 A4一覧PDF出力
@@ -124,4 +124,16 @@
 - [x] PDF GUI保存ボタンとクリックシグナルのQt自動テストを追加
 - [x] [Backend CI #39351025065](https://github.com/moyashimisosoup/pdf-works/actions/runs/39351025065)と[Windows Qt CI #39351025388](https://github.com/moyashimisosoup/pdf-works/actions/runs/39351025388)成功
 - [ ] Windows実機のフォルダ選択・保存・実PDF印刷プレビュー・40ページE2Eを確認
-- [ ] ギャラリー除外・並べ替え・ページ選択の標準Ctrl/Shift操作を次工程として実装
+- [x] ギャラリー除外・上下並べ替え・Qt標準Ctrl/Shift複数選択を開発ブランチへ実装（Windows Qt CI・実機は未確認）
+
+## 2026-10-20 ギャラリー編集・Windows標準複数選択
+- [x] ギャラリーの「前へ」「後へ」「除外」「復元」「全件復元」と「PDF対象 x/y」の表示
+- [x] 元PNGに変更を加えず、一覧PDFの選択・順序のみ変更。閉じて再度開いても状態保持。新規PNG出力時はリセット
+- [x] 非同期読み込み中の順序変更で画像を取り違えないよう、表示行と画像IDを分離
+- [x] QtのExtendedSelectionでCtrl+クリック、Shift+クリック、Ctrl+Aを接続。表示中ページと選択集合を別管理
+- [x] 複数ページの回転・削除とUndoを既存編集コアへ接続、全ページ削除は禁止
+- [x] 一括移動の意味が曖昧なときは上下移動ボタンを無効化。Deleteはページ一覧へのフォーカス時のみ
+- [x] 人工画像のギャラリー操作と、Qt実クリックを再現するGUIテストを追加
+- [ ] **最新のWindows Qt CIとバックエンドCIを確認する**（CI成功まで完了判定しない）
+- [ ] 利用者Windows PCでCtrl/ShiftキーとROIギャラリー保存を実機検証
+- [ ] UI評価後、ドラッグ並べ替え・Redo・PDF抽出/分割を検討
