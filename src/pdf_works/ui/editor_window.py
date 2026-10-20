@@ -1,7 +1,10 @@
 """Non-destructive page editor on top of the alpha viewer."""
 from __future__ import annotations
 from pathlib import Path
-from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QListWidgetItem
+from PySide6.QtCore import QItemSelectionModel, Qt
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout,
+    QLabel, QMessageBox, QPushButton, QListWidgetItem)
 from .main_window import MainWindow
 from .roi_gallery import CropGallery
 from ..core.page_edit import EditSession
@@ -24,6 +27,7 @@ class EditWindow(MainWindow):
         self._gallery_excluded = set()
         self._gallery = None
         self._gallery_serial = 0
+        self._list_navigation = False
         self._save_request = None
         self._saved_snapshot: list[tuple[int, int]] | None = None
         super().__init__()
@@ -31,6 +35,17 @@ class EditWindow(MainWindow):
 
     def _build_ui(self):
         super()._build_ui()
+        # ExtendedSelection retains Qt's native Ctrl/Shift mouse and key behavior.
+        self.page_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
+        self.page_list.currentRowChanged.disconnect(self._select_page)
+        self.page_list.currentRowChanged.connect(self._on_page_current_changed)
+        self.page_list.itemSelectionChanged.connect(self._on_page_selection_changed)
+        self.selection_label = QLabel("選択 0 ページ")
+        self.selection_label.setWordWrap(False)
+        self.selection_label.setStyleSheet("color:#726A95;")
+        self.page_list.parentWidget().layout().insertWidget(1, self.selection_label)
         tools = QHBoxLayout()
         tools.setSpacing(6)
         self._edit_buttons = {}
@@ -56,7 +71,57 @@ class EditWindow(MainWindow):
         self.save_button.clicked.connect(self._save_as)
         self.centralWidget().layout().itemAt(0).layout().insertWidget(2, self.save_button)
         self._setup_roi_tools()
+        self._setup_keyboard_shortcuts()
         self._update_controls()
+
+    def _setup_keyboard_shortcuts(self):
+        self._shortcuts = []
+        for sequence, parent, slot, context in (
+            ("Delete", self.page_list, lambda: self._edit(("delete",)),
+             Qt.ShortcutContext.WidgetWithChildrenShortcut),
+            ("Ctrl+Z", self, lambda: self._edit(("undo",)),
+             Qt.ShortcutContext.WindowShortcut),
+            ("Ctrl+O", self, self._choose_pdf, Qt.ShortcutContext.WindowShortcut),
+            ("Ctrl+Shift+S", self, self._save_as, Qt.ShortcutContext.WindowShortcut),
+        ):
+            shortcut = QShortcut(QKeySequence(sequence), parent)
+            shortcut.setContext(context)
+            shortcut.activated.connect(slot)
+            self._shortcuts.append(shortcut)
+
+    def _selected_rows(self):
+        return sorted(self.page_list.row(item)
+                      for item in self.page_list.selectedItems())
+
+    def _on_page_current_changed(self, index):
+        if index < 0:
+            return
+        self._list_navigation = True
+        try:
+            self._select_page(index)
+        finally:
+            self._list_navigation = False
+
+    def _on_page_selection_changed(self):
+        self._update_controls()
+
+    def _select_page(self, index):
+        if not 0 <= index < len(self._sizes):
+            return
+        if not self._list_navigation:
+            # Explicit page navigation selects one page; Ctrl/Shift selection
+            # from the list keeps the other selected pages intact.
+            self.page_list.blockSignals(True)
+            self.page_list.setCurrentRow(
+                index, QItemSelectionModel.SelectionFlag.ClearAndSelect,
+            )
+            self.page_list.blockSignals(False)
+        self._current_page = index
+        width, height = self._sizes[index]
+        self.viewer.set_page(width, height)
+        self.page_label.setText(f"{index+1} / {len(self._sizes)}")
+        self._update_controls()
+        self._schedule_thumbnails()
 
     def _setup_roi_tools(self):
         roi_tools = QHBoxLayout()
@@ -331,9 +396,10 @@ class EditWindow(MainWindow):
         if rid is not None:
             self._pending_thumbs.add(slot)
 
-    def _refresh_pages(self, selected):
+    def _refresh_pages(self, selected, selected_sources=None):
         if self._session is None:
             return
+        source_set = set(selected_sources or ())
         self._edit_epoch += 1
         self._latest_image_req = None
         self._thumb_ready.clear()
@@ -349,31 +415,71 @@ class EditWindow(MainWindow):
             self._sizes.append((w, h))
             mark = f" ↻{p.rotation_delta}°" if p.rotation_delta else ""
             self.page_list.addItem(QListWidgetItem(f"元{p.source_index+1}{mark}"))
+        selected = max(0, min(selected, len(self._sizes) - 1))
+        self.page_list.setCurrentRow(
+            selected, QItemSelectionModel.SelectionFlag.NoUpdate
+        )
+        retained = 0
+        if source_set:
+            for index, page in enumerate(self._session.pages):
+                if page.source_index in source_set:
+                    self.page_list.item(index).setSelected(True)
+                    retained += 1
+        if not retained:
+            self.page_list.item(selected).setSelected(True)
         self.page_list.blockSignals(False)
-        self._select_page(max(0, min(selected, len(self._sizes)-1)))
+        self._list_navigation = True
+        try:
+            self._select_page(selected)
+        finally:
+            self._list_navigation = False
         self._update_controls()
 
     def _edit(self, action):
-        if self._session is None or self._saving or self._roi_exporting or self._sheet_exporting:
+        if (self._session is None or self._saving
+                or self._roi_exporting or self._sheet_exporting):
             return
-        idx = self._current_page
         operation = action[0]
+        rows = self._selected_rows()
+        idx = self._current_page
+        before = self._session.pages
+        selected_sources = {before[row].source_index for row in rows
+                            if 0 <= row < len(before)}
         try:
             if operation == "rotate":
-                self._session.rotate(idx, action[1])
+                if not rows:
+                    return
+                self._session.rotate_many(rows, action[1])
             elif operation == "delete":
-                if QMessageBox.question(self, "ページ削除", "このページを削除しますか？（元PDFは変更されません）",
+                if not rows:
+                    return
+                if len(rows) >= len(before):
+                    QMessageBox.information(
+                        self, "削除できません",
+                        "すべてのページは削除できません。1ページ以上残してください。"
+                    )
+                    return
+                if QMessageBox.question(
+                    self, "ページ削除",
+                    f"選択中の{len(rows)}ページを削除しますか？（元PDFは変わりません）",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 ) != QMessageBox.StandardButton.Yes:
                     return
-                self._session.delete(idx)
+                self._session.delete_many(rows)
+                selected_sources.clear()
+                idx = min(rows[0], len(self._session.pages) - 1)
             elif operation == "move":
-                idx = idx + action[1]
-                self._session.move(self._current_page, idx)
+                if len(rows) != 1:
+                    return
+                idx = rows[0] + action[1]
+                self._session.move(rows[0], idx)
             elif operation == "undo":
                 if not self._session.undo():
                     return
-            self._refresh_pages(idx)
+                selected_sources.clear()
+            else:
+                return
+            self._refresh_pages(idx, selected_sources)
         except (ValueError, IndexError) as exc:
             QMessageBox.information(self, "編集できません", str(exc))
 
@@ -383,18 +489,23 @@ class EditWindow(MainWindow):
             return
         ready = (self._session is not None and not self._saving
                  and not self._roi_exporting and not self._sheet_exporting)
-        idx = self._current_page
+        rows = self._selected_rows() if ready else []
+        total = len(self._session.pages) if self._session else 0
+        self.selection_label.setText(f"選択 {len(rows)}/{total} ページ")
+        index = rows[0] if len(rows) == 1 else self._current_page
         for key, button in self._edit_buttons.items():
-            active = ready
-            if key == "delete": active = ready and len(self._session.pages) > 1
-            if key == "up": active = ready and idx > 0
-            if key == "down": active = ready and idx < len(self._session.pages)-1
-            if key == "undo": active = ready and self._session.can_undo
+            active = ready and bool(rows)
+            if key == "delete":
+                active = active and len(rows) < total
+            if key == "up":
+                active = active and len(rows) == 1 and index > 0
+            if key == "down":
+                active = active and len(rows) == 1 and index < total - 1
+            if key == "undo":
+                active = ready and self._session.can_undo
             button.setEnabled(active)
         self.save_button.setEnabled(ready)
-        self.open_button.setEnabled(
-            not self._saving and not self._roi_exporting and not self._sheet_exporting
-        )
+        self.open_button.setEnabled(ready or self._session is None)
         if hasattr(self, "roi_toggle"):
             self.roi_toggle.setEnabled(ready)
             self.roi_clear.setEnabled(ready and self.viewer.roi is not None)
