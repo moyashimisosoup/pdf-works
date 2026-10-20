@@ -119,6 +119,17 @@ def run_worker(requests: Any, results: Any) -> None:
                 )
                 response.update(status="ok", count=len(files),
                                 files=[str(p) for p in files])
+            elif op=="split_groups":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.page_partition import export_partitioned_pdf
+                parts = export_partitioned_pdf(
+                    document.name, req["destination_dir"],
+                    req["pages"], req["prefix"], req["mode"],
+                    size=req.get("size"), boundaries=req.get("boundaries"),
+                )
+                response.update(status="ok",count=len(parts),
+                                files=[str(p) for p in parts])
             elif op=="roi_export":
                 if document is None or req.get("generation")!=generation:
                     raise RuntimeError("PDF document is not open")
