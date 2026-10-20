@@ -22,6 +22,11 @@ def app():
 @pytest.fixture
 def editor(app, monkeypatch, tmp_path):
     monkeypatch.setattr(EditWindow, "_start_worker", lambda self: None)
+    # Closing a dirty editor requires user consent; automate only this test path.
+    monkeypatch.setattr(
+        QMessageBox, "question",
+        lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+    )
     view=EditWindow()
     src=tmp_path/"synthetic.pdf"
     src.write_bytes(b"NO REAL DOCUMENT NEEDED FOR UI")
