@@ -46,6 +46,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/test_page_extract_ui.py -q
+      - name: Test fixed-size and explicit cut-point Qt dialogs
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_split_dialog_ui.py tests/test_split_groups_ui.py -q
       - name: Capture Windows Qt widget pixels
         env:
           QT_QPA_PLATFORM: offscreen
