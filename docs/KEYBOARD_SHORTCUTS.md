@@ -1,5 +1,5 @@
 # PDF Works: Windowsページ操作・ショートカット仕様（設計案）
-**2026-10-20 beta実装**：Qtの標準モデル選択動作を用い、Ctrl/ShiftとCtrl+A、一括回転・削除、Undo、Ctrl+O、Ctrl+Shift+Sを接続。Windows Qt CIと利用者PCでの実機確認は別ゲート。Redo等は未実装。
+**2026-10-20 beta実装**：Qtの標準モデル選択動作を用い、Ctrl/ShiftとCtrl+A、一括回転・削除、Undo、Ctrl+O、Ctrl+Shift+Sを接続。[Windows Qt CI #39397018840](https://github.com/moyashimisosoup/pdf-works/actions/runs/39397018840)成功。利用者PCでの実機操作は未確認、Redo等は未実装。
 
 | 操作 | 期待動作 |
 |---|---|

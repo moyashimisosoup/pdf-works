@@ -134,6 +134,6 @@
 - [x] 複数ページの回転・削除とUndoを既存編集コアへ接続、全ページ削除は禁止
 - [x] 一括移動の意味が曖昧なときは上下移動ボタンを無効化。Deleteはページ一覧へのフォーカス時のみ
 - [x] 人工画像のギャラリー操作と、Qt実クリックを再現するGUIテストを追加
-- [ ] **最新のWindows Qt CIとバックエンドCIを確認する**（CI成功まで完了判定しない）
+- [x] [Windows Qt CI #39397018840](https://github.com/moyashimisosoup/pdf-works/actions/runs/39397018840)と[Backend CI #39397018834](https://github.com/moyashimisosoup/pdf-works/actions/runs/39397018834)成功。Windows Qtは人工PDFの画面操作テスト・スクショであり、利用者PC実機ではない
 - [ ] 利用者Windows PCでCtrl/ShiftキーとROIギャラリー保存を実機検証
 - [ ] UI評価後、ドラッグ並べ替え・Redo・PDF抽出/分割を検討

@@ -43,3 +43,8 @@
 - 編集後の表示順と除外状態は編集ウィンドウ側で保存し、ギャラリーを閉じても維持。新しいPNG出力が成功すれば新しい結果にリセットする。
 - ダブルクリックは並べ替え後も元ページIDを使用。A4 PDFの入力には**選択中かつ現在表示順のPNG・元ページIDだけ**を渡す。
 - 現段階ではWindows Qt CI・利用者PCの手動確認を別々に行う。元のPNGやPDFは変更しない。
+
+## 2026-10-20 CIによる確認
+- [Windows Qt CI #39397018840](https://github.com/moyashimisosoup/pdf-works/actions/runs/39397018840) 成功：人工画像で除外・復元・上下移動・選択IDを検証。ギャラリーのウィジェット画像を生成。
+- [Backend CI #39397018834](https://github.com/moyashimisosoup/pdf-works/actions/runs/39397018834) 成功：既存PNG/A4 PDF生成試験は引き続き成功。
+- 利用者PCでの実ファイル選択、保存、Ctrl/Shiftキーの実機操作は未確認。本文PDF自体のページ順変更と一覧画像の順序変更は異なる機能。
