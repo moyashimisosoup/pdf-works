@@ -20,6 +20,8 @@ class EditWindow(MainWindow):
         self._roi_sources_pending = []
         self._gallery_files = []
         self._gallery_sources = []
+        self._gallery_order = []
+        self._gallery_excluded = set()
         self._gallery = None
         self._gallery_serial = 0
         self._save_request = None
@@ -120,9 +122,25 @@ class EditWindow(MainWindow):
         self._update_controls()
         self.statusBar().showMessage("PNGを出力中…")
 
+    def _sheet_entries(self):
+        ids = [uid for uid in self._gallery_order
+               if uid not in self._gallery_excluded]
+        return ([self._gallery_files[uid] for uid in ids],
+                [self._gallery_sources[uid] for uid in ids])
+
+    def _on_gallery_layout_changed(self, order, excluded):
+        self._gallery_order = list(order)
+        self._gallery_excluded = set(excluded)
+
     def _export_sheet(self):
         if (not self._gallery_files or not self._gallery_sources
                 or self._saving or self._roi_exporting or self._sheet_exporting):
+            return
+        images, sources = self._sheet_entries()
+        if not images:
+            QMessageBox.information(
+                self, "一覧PDF", "少なくとも1件を復元してください。"
+            )
             return
         src = Path(self._pdf_path) if self._pdf_path else None
         suggested = str(src.with_name(src.stem + "_roi_sheet.pdf")) if src else "roi_sheet.pdf"
@@ -144,7 +162,7 @@ class EditWindow(MainWindow):
         request = self._bridge.send(
             "roi_sheet_export", generation=self._generation,
             destination=str(destination),
-            files=list(self._gallery_files), sources=list(self._gallery_sources),
+            files=images, sources=sources,
         )
         if request is None:
             QMessageBox.warning(self, "処理中", "PDFワーカーが混雑しています。")
@@ -162,12 +180,16 @@ class EditWindow(MainWindow):
             self._gallery.raise_()
             self._gallery.activateWindow()
             return
-        gallery = CropGallery(self._gallery_files, self._gallery_sources, self)
+        gallery = CropGallery(
+            self._gallery_files, self._gallery_sources, self,
+            order=self._gallery_order, excluded=self._gallery_excluded,
+        )
         self._gallery = gallery
         self._gallery_serial += 1
         serial = self._gallery_serial
         gallery.source_requested.connect(self._jump_to_source)
         gallery.pdf_requested.connect(self._export_sheet)
+        gallery.layout_changed.connect(self._on_gallery_layout_changed)
         gallery.destroyed.connect(
             lambda *_: self._gallery_closed(serial)
         )
@@ -206,6 +228,8 @@ class EditWindow(MainWindow):
         self._saved_snapshot = None
         self._gallery_files = []
         self._gallery_sources = []
+        self._gallery_order = []
+        self._gallery_excluded = set()
         if self._gallery is not None:
             self._gallery.close()
         self._edit_epoch += 1
@@ -246,6 +270,8 @@ class EditWindow(MainWindow):
                         self._gallery = None
                     self._gallery_files = list(files)
                     self._gallery_sources = list(self._roi_sources_pending)
+                    self._gallery_order = list(range(len(files)))
+                    self._gallery_excluded = set()
                 self.statusBar().showMessage(
                     f"{response['count']}ページ分のPNGを出力しました。"
                 )
