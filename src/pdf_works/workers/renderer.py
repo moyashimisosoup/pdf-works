@@ -112,6 +112,15 @@ def run_worker(requests: Any, results: Any) -> None:
                                           roi,req["pages"],dpi=req.get("dpi",200))
                 response.update(status="ok",count=len(paths),
                                 files=[str(path) for path in paths])
+            elif op=="roi_sheet_export":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.roi_sheet import save_roi_contact_sheet
+                sheets = save_roi_contact_sheet(
+                    req["files"], req["sources"], req["destination"],
+                )
+                response.update(status="ok",count=sheets,
+                                destination=req["destination"])
             else:
                 raise ValueError(f"Unknown operation {op!r}")
         except Exception as exc:
