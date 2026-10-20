@@ -42,6 +42,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/test_editor_multiselect_ui.py -q
+      - name: Test page extraction and split dialogs
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_page_extract_ui.py -q
       - name: Capture Windows Qt widget pixels
         env:
           QT_QPA_PLATFORM: offscreen

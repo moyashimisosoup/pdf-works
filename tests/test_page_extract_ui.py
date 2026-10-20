@@ -20,6 +20,8 @@ def app():
 @pytest.fixture
 def editor(app, monkeypatch, tmp_path):
     monkeypatch.setattr(EditWindow, "_start_worker", lambda self: None)
+    monkeypatch.setattr(QMessageBox,"question",
+                        lambda *args, **kwargs: QMessageBox.StandardButton.Yes)
     window = EditWindow()
     source = tmp_path / "synthetic.pdf"
     source.write_bytes(b"INERT SYNTHETIC PLACEHOLDER")
