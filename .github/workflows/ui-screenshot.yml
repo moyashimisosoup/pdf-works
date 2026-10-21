@@ -59,6 +59,10 @@ jobs:
         run: python -m pytest tests/test_optimize_ui.py -q
       - name: Test Windows lossless PDF save and spawned worker
         run: python -m pytest tests/test_optimize.py tests/test_optimize_worker.py -q
+      - name: Test complete Qt optimizer flow with real Windows worker
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_optimize_e2e_ui.py -q
       - name: Capture Windows Qt widget pixels
         env:
           QT_QPA_PLATFORM: offscreen
