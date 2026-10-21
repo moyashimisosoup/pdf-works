@@ -17,6 +17,33 @@ git switch feature/native-page-edit-20261017
 .\.venv\Scripts\python.exe -m pdf_works
 ```
 
+## 人工40ページの受入補助（推奨・2026-10-21追加）
+
+従来の`tests/sample_40.pdf`と併用できます。新しい補助スクリプトは**元PDFを上書きせず**、受入試験専用の人工40ページPDF・原本SHA-256・チェックリストを`output/beta-acceptance/run-.../`内に生成します。`output/`はGit管理の対象外です。
+
+ブランチを最新にした後、既存の仮想環境から以下を実行します。
+
+```powershell
+git fetch origin
+git switch feature/native-page-edit-20261017
+git pull --ff-only origin feature/native-page-edit-20261017
+.\.venv\Scripts\python.exe scripts/windows_beta_acceptance.py prepare
+.\.venv\Scripts\python.exe -m pdf_works
+```
+
+1. `prepare`実行時に出力される`source_40.pdf`のパスを確認し、起動したPDF Worksで開く。
+2. 同じフォルダにある`manual-checklist.md`に沿い、Ctrl/Shift複数選択・編集/Undo・ROI PNG・ギャラリー・A4一覧PDF・抽出/分割・画面操作性を実機で確認する。
+3. 未保存編集がない状態で「容量を最適化」→ **同じ実行フォルダの`optimized.pdf`として新規保存**する。もし既に存在したら上書きせず、新たな`prepare`実行フォルダで試す。
+4. PDF Worksを閉じた後、同じリポジトリのPowerShellから以下を実行する。
+
+```powershell
+.\.venv\Scripts\python.exe scripts/windows_beta_acceptance.py verify
+```
+
+`verify`は直近の試験フォルダを自動選択し、`verification.json`へ**原本SHA-256の不変、容量の前後差、全40ページの文字・寸法・回転、先頭/中央/末尾ページの描画一致**を保存します。PDFがまだ出力されていない場合は`incomplete`、差異・破損時は`fail`を返します。`pass`も**自動内容照合の合格**に限り、クリック・フリーズ・DPIの実機操作まで合格したことにはなりません。手動チェック結果も必ず別に記録してください。
+
+学内資料・個人情報入りPDFは受入補助に渡さず、試験データ・`verification.json`・端末情報を公開GitHubへアップロードしないでください。
+
 ## 手動で確認すること
 1. 空画面表示・PDF読込・ページ送り・300%ズームが以前と同様に軽いか。
 2. 選択したページの左右90°回転が表示にも反映されるか。
