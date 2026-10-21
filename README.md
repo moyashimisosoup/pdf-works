@@ -3,8 +3,7 @@
 **Lightweight PDF workbench for Windows**  
 軽量・高速・シンプルなPDF編集と、全ページ共通領域の切り出し・一覧化を目指すWindowsデスクトップアプリ。
 
-> **状態：v5の設計・初期構造整備段階（2026-10-17）**  
-> このリポジトリには、現時点では動作するWindowsアプリやEXEはありません。仕様・構造を先に固定し、機能を段階的に実装します。
+> **状態（2026-10-21）**：`main`はWindows実機で40ページ閲覧等を基本確認したalpha版。`feature/native-page-edit-20261017`はページ編集・ROI一覧・抽出/分割・品質維持最適化を含むbeta版（[Draft PR #1](https://github.com/moyashimisosoup/pdf-works/pull/1)）。betaのGitHub Actions上での自動試験は成功していますが、**利用者Windows PCのbeta全機能E2Eは未確認**です。EXE配布は未実施で、起動にはPythonと依存ライブラリが必要です。
 
 ## 開発の原則
 
@@ -26,7 +25,7 @@
 | v5.2 | 手書き番号OCR・訂正・番号順整列 | 後続 |
 | v5.3 | 確認済み訂正サンプルの蓄積・モデル評価 | 後続 |
 
-## 技術方針（採用予定）
+## 技術構成（採用済みと今後の計画）
 
 - UI：**PySide6 / Qt Widgets**（pywebview・ブラウザ内蔵を使わない）
 - PDF：**PyMuPDF**（商用/AGPLライセンス条件の確認が必要）
@@ -74,4 +73,16 @@ py -3 -m venv .venv
 
 [Windows実機確認手順](docs/ALPHA_RUN.md) / [変更履歴](docs/CHANGELOG.md)
 
-**注意**：現段階ではPDFの表示とズーム・ページ移動のみ。保存・切り出し・OCRは未実装です。開発環境でバックエンド5テストに合格しましたが、WindowsのQt画面動作は未検証です。
+**注意**：この段落の起動コマンドは閲覧用alphaの入口です。betaの保存・切り出し・最適化は開発ブランチで実装済みであり、[Windows beta試験手順](docs/BETA_RUN.md)に従って起動してください。OCRは後続機能です。betaのWindows CIでは人工PDFを用いた40ページQt→実ワーカー最適化E2Eを確認済みですが、利用者PCでのbeta受入は未完了です。
+
+## 編集機能の開発ブランチ
+
+Windowsネイティブのページ編集beta（90°回転、削除、上下移動、Undo、別名保存）を `feature/native-page-edit-20261017` で開発しています。mainは実機動作確認済みの閲覧用alphaを維持します。betaはQt/Windows操作未確認のため、試す際は [beta実機手順](docs/BETA_RUN.md) を先に確認してください。
+
+## フォントと文字の太さ（beta）
+
+- **Zen Maru Gothic** をQtが直接読み込み、Windowsへのフォントインストール不要。
+- 初回だけ `.\.venv\Scripts\python.exe scripts/install_fonts.py` を実行。公式OFL配布元から3ウェイトをチェックサム検証付きで取得。
+- 起動後は完全オフライン。上部「文字」で **400 / 500（標準）/ 700** を比較し、設定を保持。
+- フォントファイルはGitHubに保存せず、配布時はOFLライセンスを同梱。
+- 詳細：[文字の視認性評価](docs/TYPOGRAPHY_EVALUATION.md)。Windows Actions上ではQt自動試験を実施済みですが、利用者PCでの表示・DPI確認は未完了です。

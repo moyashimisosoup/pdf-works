@@ -31,3 +31,6 @@ samples/private/
 Thumbs.db
 .vscode/
 .idea/
+
+# Downloaded OFL font binaries: package at build time, not in Git
+src/pdf_works/resources/fonts/*.ttf

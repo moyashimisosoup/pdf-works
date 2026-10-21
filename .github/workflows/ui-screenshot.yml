@@ -4,7 +4,11 @@ on:
   pull_request:
     paths:
       - "src/pdf_works/ui/**"
+      - "src/pdf_works/core/optimize.py"
+      - "src/pdf_works/workers/renderer.py"
+      - "tests/test_optimize*.py"
       - "scripts/capture_ui.py"
+      - "scripts/windows_beta_acceptance.py"
       - ".github/workflows/ui-screenshot.yml"
   workflow_dispatch:
 
@@ -25,11 +29,45 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Qt and PDF dependencies
-        run: python -m pip install -e ".[desktop]"
+        run: python -m pip install -e ".[desktop,dev]"
       - name: Fetch pinned OFL UI fonts
         run: python scripts/install_fonts.py
       - name: Create synthetic 40-page PDF
         run: python scripts/generate_test_pdf.py tests/sample_40.pdf --pages 40
+      - name: Test real Qt ROI viewport drag
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_roi_ui.py -q
+      - name: Test lazy ROI gallery and source navigation
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_gallery_ui.py -q
+      - name: Test Ctrl Shift page selection and batch editing
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_editor_multiselect_ui.py -q
+      - name: Test page extraction and split dialogs
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_page_extract_ui.py -q
+      - name: Test fixed-size and explicit cut-point Qt dialogs
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_split_dialog_ui.py tests/test_split_groups_ui.py -q
+      - name: Test lossless compression GUI and byte-size result
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_optimize_ui.py -q
+      - name: Test Windows lossless PDF save and spawned worker
+        run: python -m pytest tests/test_optimize.py tests/test_optimize_worker.py -q
+      - name: Test raster and vector PDF visual fidelity
+        run: python -m pytest tests/test_optimize_visual.py -q -s
+      - name: Test complete Qt optimizer flow with real Windows worker
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_optimize_e2e_ui.py -q
+      - name: Test local Windows beta acceptance preparation and verification
+        run: python -m pytest tests/test_windows_beta_acceptance.py -q
       - name: Capture Windows Qt widget pixels
         env:
           QT_QPA_PLATFORM: offscreen

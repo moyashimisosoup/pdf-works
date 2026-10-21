@@ -43,6 +43,7 @@ def run_worker(requests: Any, results: Any) -> None:
     import fitz
     document=None
     generation=-1
+    original_rotations=[]
     deferred=deque()
     while True:
         try:
@@ -65,7 +66,8 @@ def run_worker(requests: Any, results: Any) -> None:
         op=req.get("op")
         if op=="stop":
             break
-        response={"id":req.get("id"),"op":op,"generation":req.get("generation")}
+        response={"id":req.get("id"),"op":op,"generation":req.get("generation"),
+                  "slot":req.get("slot"),"epoch":req.get("epoch")}
         try:
             if op=="open":
                 if document is not None:
@@ -79,13 +81,88 @@ def run_worker(requests: Any, results: Any) -> None:
                     raise ValueError("パスワード保護されたPDFはalpha版では未対応です")
                 if not document.is_pdf:
                     raise ValueError("PDFを選択してください")
-                response.update(status="ok",sizes=page_metadata(document),count=len(document))
+                original_rotations=[p.rotation for p in document]
+                import os
+                response.update(status="ok",sizes=page_metadata(document),
+                                count=len(document),
+                                file_bytes=os.path.getsize(document.name))
             elif op in ("render","thumb"):
                 if document is None or req.get("generation")!=generation:
                     continue
-                image=(render_region(document,req["page"],tuple(req["clip"]),float(req["scale"]))
-                       if op=="render" else render_thumbnail(document,req["page"]))
-                response.update(status="ok",page=req["page"],image=image)
+                page_no=req["page"]
+                delta=req.get("rotation",0)
+                if delta not in (0,90,180,270):
+                    raise ValueError("Invalid page rotation")
+                document[page_no].set_rotation((original_rotations[page_no]+delta)%360)
+                image=(render_region(document,page_no,tuple(req["clip"]),float(req["scale"]))
+                       if op=="render" else render_thumbnail(document,page_no))
+                response.update(status="ok",page=page_no,image=image)
+            elif op=="export":
+                if document is None or req.get("generation")!=generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.export import save_edited_pdf
+                count=save_edited_pdf(req["path"],req["destination"],req["pages"])
+                response.update(status="ok",count=count,destination=req["destination"])
+            elif op=="optimize_lossless":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.optimize import optimize_pdf_lossless
+                details = optimize_pdf_lossless(
+                    document.name, req["destination"],
+                )
+                response.update(status="ok", destination=req["destination"],
+                                **details)
+            elif op=="extract_selected":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.export import save_edited_pdf
+                count = save_edited_pdf(
+                    document.name, req["destination"], req["pages"],
+                )
+                response.update(status="ok", count=count,
+                                destination=req["destination"])
+            elif op=="split_selected":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.page_extract import split_selected_pdf
+                files = split_selected_pdf(
+                    document.name, req["destination_dir"],
+                    req["pages"], req["prefix"],
+                )
+                response.update(status="ok", count=len(files),
+                                files=[str(p) for p in files])
+            elif op=="split_groups":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.page_partition import export_partitioned_pdf
+                parts = export_partitioned_pdf(
+                    document.name, req["destination_dir"],
+                    req["pages"], req["prefix"], req["mode"],
+                    size=req.get("size"), boundaries=req.get("boundaries"),
+                )
+                response.update(status="ok",count=len(parts),
+                                files=[str(p) for p in parts])
+            elif op=="roi_export":
+                if document is None or req.get("generation")!=generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.crop import NormalizedROI, export_region_pngs
+                # Read only the already-opened source file, never an untrusted
+                # path supplied by the exporting caller.
+                source_path = document.name
+                roi=NormalizedROI(*req["roi"])
+                paths=export_region_pngs(source_path,req["destination_dir"],
+                                          roi,req["pages"],dpi=req.get("dpi",200))
+                response.update(status="ok",count=len(paths),
+                                files=[str(path) for path in paths])
+            elif op=="roi_sheet_export":
+                if document is None or req.get("generation") != generation:
+                    raise RuntimeError("PDF document is not open")
+                from ..core.roi_sheet import save_roi_contact_sheet
+                sheets = save_roi_contact_sheet(
+                    req["files"], req["sources"], req["destination"],
+                )
+                response.update(status="ok",count=sheets,
+                                destination=req["destination"])
             else:
                 raise ValueError(f"Unknown operation {op!r}")
         except Exception as exc:
