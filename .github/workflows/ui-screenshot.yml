@@ -59,6 +59,8 @@ jobs:
         run: python -m pytest tests/test_optimize_ui.py -q
       - name: Test Windows lossless PDF save and spawned worker
         run: python -m pytest tests/test_optimize.py tests/test_optimize_worker.py -q
+      - name: Test raster and vector PDF visual fidelity
+        run: python -m pytest tests/test_optimize_visual.py -q -s
       - name: Test complete Qt optimizer flow with real Windows worker
         env:
           QT_QPA_PLATFORM: offscreen
