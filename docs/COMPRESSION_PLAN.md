@@ -37,3 +37,13 @@
 - [Backend CI #39413724878](https://github.com/moyashimisosoup/pdf-works/actions/runs/39413724878)：成功。1/8/40ページ・PDF構造/文字・フォーム/添付ファイル拒否・spawn IPCの試験。
 - [Windows Qt UI CI #39413725210](https://github.com/moyashimisosoup/pdf-works/actions/runs/39413725210)：成功。保存先選択・未保存編集保護・増加時表示・既存ボタン回帰試験と人工PDFのUIスクショ。
 - 自動テスト成功は利用者PCの実PDFや署名済み文書の安全性保証にはならない。品質維持モードの対象外文書は引き続き拒否する。
+
+## 2026-10-21 安全性・Qt実ワーカーE2Eの検証結果
+
+- [Backend CI #39562384297](https://github.com/moyashimisosoup/pdf-works/actions/runs/39562384297)：**84 passed、8 skipped**。LinuxにPySide6がないためQt側のE2EはWindows CIで別に実施。
+- [Windows Qt CI #39562384279](https://github.com/moyashimisosoup/pdf-works/actions/runs/39562384279)：**SUCCESS**。圧縮コア+spawnワーカーのWindows試験13件成功、Qt画面→実worker→新規PDF保存の人工40ページE2E 1件成功。
+- `tests/test_optimize.py`に人工の署名フィールド3条件（未署名、署名辞書/ByteRange/Contentsを模した構造、SigFlags未設定）とAES-256暗号化PDFの拒否回帰4件を追加。拒否時は出力が作られず原本ハッシュが不変。
+- 署名辞書fixtureの`/Contents`は**人工ダミー**で、暗号学的に有効な電子署名ではない。実際の署名付きPDFの署名検証・証明書チェーン・信頼性までは検証していない。
+- `tests/test_optimize_e2e_ui.py`はQtのオフスクリーン環境で実ウィンドウ・実spawnワーカーを使用。40ページを開き、Qt「容量を最適化」クリック、新規保存、しおり・文字・原本SHA-256不変・状態表示を確認。Qtイベント処理の手動実機体感やDPI、描画見た目の評価を代替しない。
+- 未検証：利用者Windows PCでの40ページ操作、署名済み実文書、多様なフォントと透明表現、画像主体PDF、長時間・メモリ・処理速度。品質維持モードでサイズが必ず小さくなる保証はない。
+- `fitz` APIの将来廃止警告がCIに1件出ている。後続の互換性整理で`import pymupdf`への移行を検討するが、今回の正常動作している圧縮コアへの変更は加えない。
