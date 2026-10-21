@@ -93,6 +93,71 @@ def test_reject_interactive_form(tmp_path):
     assert not (tmp_path/"new.pdf").exists()
 
 
+@pytest.mark.parametrize("case", ["unsigned", "signed_like", "missing_sigflags"])
+def test_reject_signature_fields(tmp_path, case):
+    """Refuse signature fields, even when optional SigFlags are missing.
+
+    The signed_like fixture has a /Sig dictionary and synthetic /ByteRange
+    and /Contents values. This is *not* a cryptographically valid signature.
+    It tests structural preflight refusal, not signature verification.
+    """
+    src = tmp_path / f"signature_{case}.pdf"
+    with fitz.open() as doc:
+        page = doc.new_page()
+        page.insert_text((40, 80), "Artificial signature regression")
+        field = fitz.Widget()
+        field.field_name = "Approval"
+        field.field_type = fitz.PDF_WIDGET_TYPE_SIGNATURE
+        field.rect = fitz.Rect(40, 105, 170, 145)
+        added = page.add_widget(field)
+        if case == "unsigned":
+            doc.xref_set_key(doc.pdf_catalog(), "AcroForm/SigFlags", "1")
+        elif case == "signed_like":
+            doc.xref_set_key(
+                added.xref, "V",
+                ("<< /Type /Sig /Filter /Adobe.PPKLite "
+                 "/SubFilter /adbe.pkcs7.detached "
+                 "/ByteRange [0 0 0 0] /Contents <00> >>"),
+            )
+        else:
+            # SigFlags is optional: ensure form detection still blocks rewrite.
+            doc.xref_set_key(doc.pdf_catalog(), "AcroForm/SigFlags", "null")
+        doc.save(src)
+
+    with fitz.open(src) as doc:
+        assert doc.is_form_pdf
+        assert doc.get_sigflags() == {
+            "unsigned": 1, "signed_like": 3, "missing_sigflags": -1,
+        }[case]
+    original_hash = hashlib.sha256(src.read_bytes()).digest()
+    out = tmp_path / "optimized.pdf"
+    with pytest.raises(ValueError, match="Form or signed"):
+        optimize_pdf_lossless(src, out)
+    assert not out.exists()
+    assert hashlib.sha256(src.read_bytes()).digest() == original_hash
+
+
+def test_reject_encrypted_pdf(tmp_path):
+    src = tmp_path / "encrypted.pdf"
+    with fitz.open() as doc:
+        page = doc.new_page()
+        page.insert_text((40, 80), "Artificial confidential PDF")
+        doc.save(
+            src,
+            encryption=fitz.PDF_ENCRYPT_AES_256,
+            owner_pw="test-owner-only",
+            user_pw="test-password",
+        )
+    with fitz.open(src) as doc:
+        assert doc.needs_pass
+    original_hash = hashlib.sha256(src.read_bytes()).digest()
+    out = tmp_path / "optimized.pdf"
+    with pytest.raises(ValueError, match="Encrypted or protected"):
+        optimize_pdf_lossless(src, out)
+    assert not out.exists()
+    assert hashlib.sha256(src.read_bytes()).digest() == original_hash
+
+
 def test_reject_embedded_files(tmp_path):
     src=tmp_path/"embedded.pdf"
     with fitz.open() as doc:
