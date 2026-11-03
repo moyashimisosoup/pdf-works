@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pdf-works"
-version = "5.0.0a0"
-description = "Lightweight native PDF viewer for Windows (alpha)"
+version = "5.0.0b1"
+description = "Native PDF editor and ROI workbench for Windows (beta)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
