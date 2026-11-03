@@ -2,23 +2,22 @@
 from __future__ import annotations
 from collections import deque
 from pathlib import Path
-from PySide6.QtCore import QTimer,QSize,Qt
+from PySide6.QtCore import QTimer,QSize,Qt,QSettings
 from PySide6.QtGui import QFont,QFontDatabase,QIcon,QImage,QPixmap
 from PySide6.QtWidgets import (QAbstractItemView,QApplication,QComboBox,QFileDialog,
     QFrame,QHBoxLayout,QLabel,QListWidget,QListWidgetItem,QMainWindow,
     QMessageBox,QPushButton,QSplitter,QVBoxLayout,QWidget)
 from .viewer import PdfViewer
+from .button_theme import BUTTON_STYLE
+from .theme import COMBO_STYLE
+from .widgets.combo_box import SoftComboBox
+from .typography import PRESETS, font_for_preset, font_status
 from ..workers.bridge import PdfBridge
+from ..core.file_size import format_file_size
 
 STYLE="""
 QMainWindow,QWidget {background:#FCFBF7;color:#351F39;}
 QLabel {border:0px;}
-QPushButton,QComboBox {border:1px solid #D8D0D4;border-radius:11px;
-padding:8px 13px;min-height:21px;background:#FCFBF7;color:#351F39;}
-QPushButton:hover,QComboBox:hover {border-color:#726A95;}
-QPushButton:pressed {background:#F4E8C1;}
-QPushButton:disabled {color:#99939B;}
-QPushButton#primary {border-color:#709FB0;}
 QFrame#panel {border:1px solid #D8D0D4;border-radius:22px;}
 QListWidget {background:#FCFBF7;border:0px;outline:none;}
 QListWidget::item {border-radius:12px;margin:3px;padding:4px;}
@@ -29,11 +28,8 @@ QScrollBar::handle:vertical {background:#D8D0D4;border-radius:5px;min-height:20p
 """
 
 def japanese_font()->QFont:
-    available=set(QFontDatabase.families())
-    for family in ("源柔ゴシック","GenJyuuGothic","Zen Maru Gothic",
-                   "BIZ UDPGothic","Yu Gothic UI","Meiryo"):
-        if family in available: return QFont(family,11)
-    return QFont("Sans Serif",11)
+    # Consistent startup font: loaded from a local file when available.
+    return font_for_preset("standard")
 
 def rgb_to_pixmap(image:dict)->QPixmap:
     qimg=QImage(image["samples"],image["width"],image["height"],image["stride"],
@@ -46,7 +42,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("pdf-works | Soft Outline")
         self.resize(1160,780)
         self.setMinimumSize(560,440)
-        self.setStyleSheet(STYLE)
+        self.setStyleSheet(STYLE + BUTTON_STYLE + COMBO_STYLE)
         self._pdf_path=None
         self._generation=0
         self._sizes=[]
@@ -55,13 +51,14 @@ class MainWindow(QMainWindow):
         self._thumb_ready=set()
         self._pending_thumbs=set()
         self._thumb_queue=deque()
+        self._font_preset = str(QSettings("pdf-works", "desktop").value("text_weight", "standard"))
+        if self._font_preset not in PRESETS:
+            self._font_preset = "standard"
         self._bridge=PdfBridge(self)
         self._bridge.result_ready.connect(self._on_worker_reply)
         self._bridge.worker_failed.connect(self._on_worker_failed)
         self._build_ui()
-        font=japanese_font()
-        QApplication.instance().setFont(font)
-        self.title_label.setFont(QFont(font.family(),16,QFont.Weight.Medium))
+        self._apply_font_preset(self._font_preset, save=False)
         QTimer.singleShot(0,self._start_worker)
 
     def _build_ui(self):
@@ -76,6 +73,10 @@ class MainWindow(QMainWindow):
         self.filename=QLabel("PDFを開いてください")
         self.filename.setStyleSheet("color:#726A95")
         header.addWidget(self.filename,stretch=1)
+        self.size_label=QLabel("")
+        self.size_label.setWordWrap(False)
+        self.size_label.setStyleSheet("color:#726A95;")
+        header.addWidget(self.size_label)
         self.open_button=QPushButton("開く")
         self.open_button.setObjectName("primary")
         self.open_button.clicked.connect(self._choose_pdf)
@@ -91,7 +92,7 @@ class MainWindow(QMainWindow):
         self.page_label=QLabel("0 / 0")
         self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.page_label.setMinimumWidth(65)
-        self.zoom_combo=QComboBox()
+        self.zoom_combo=SoftComboBox()
         for z in (50,75,100,125,150,200,250,300):
             self.zoom_combo.addItem(f"{z}%",z/100)
         self.zoom_combo.setCurrentIndex(2)
@@ -100,6 +101,18 @@ class MainWindow(QMainWindow):
         bar.addStretch()
         bar.addWidget(QLabel("表示倍率"))
         bar.addWidget(self.zoom_combo)
+        bar.addSpacing(10)
+        bar.addWidget(QLabel("文字"))
+        self.font_combo = SoftComboBox()
+        self.font_combo.setToolTip("操作文字の太さを比較して選べます")
+        for key, title in PRESETS.items():
+            self.font_combo.addItem(title, key)
+        self.font_combo.setCurrentIndex(list(PRESETS).index(self._font_preset))
+        self.font_combo.currentIndexChanged.connect(self._on_font_choice)
+        bar.addWidget(self.font_combo)
+        self.font_source = QLabel("")
+        self.font_source.setStyleSheet("color:#726A95;")
+        bar.addWidget(self.font_source)
         layout.addLayout(bar)
 
         self.splitter=QSplitter(Qt.Orientation.Horizontal)
@@ -135,6 +148,34 @@ class MainWindow(QMainWindow):
         self._thumb_timer.timeout.connect(self._queue_visible_thumbnails)
         self._update_controls()
 
+    def _on_font_choice(self, index: int):
+        preset = self.font_combo.itemData(index)
+        if preset in PRESETS:
+            self._apply_font_preset(preset)
+
+    def _apply_font_preset(self, preset: str, save: bool = True):
+        self._font_preset = preset
+        base_font = font_for_preset(preset)
+        QApplication.instance().setFont(base_font)
+        self.setFont(base_font)
+        # Keep the application name prominent; compare the actual controls,
+        # not only a preview sample.
+        heading = QFont(base_font)
+        heading.setPointSize(16)
+        heading.setWeight(QFont.Weight.Bold)
+        self.title_label.setFont(heading)
+        source = font_status()
+        if source["embedded"]:
+            self.font_source.setText("書体：Zen Maru")
+            self.font_source.setToolTip("アプリ専用フォントを読込済み。PCへのインストールは不要です。")
+        else:
+            self.font_source.setText("書体：代替")
+            self.font_source.setToolTip(
+                "フォント未配置：scripts/install_fonts.py を1回実行して再起動してください。"
+            )
+        if save:
+            QSettings("pdf-works", "desktop").setValue("text_weight", preset)
+
     def _start_worker(self):
         try:
             self._bridge.start()
@@ -161,6 +202,7 @@ class MainWindow(QMainWindow):
         self.page_list.blockSignals(False)
         self.viewer.reset_document()
         self.filename.setText(Path(path).name)
+        self.size_label.setText("")
         self.statusBar().showMessage("PDFを読み込み中…")
         self._bridge.send("open",path=path,generation=self._generation)
 
@@ -177,6 +219,12 @@ class MainWindow(QMainWindow):
             else: self.statusBar().showMessage("PDF描画に失敗しました。")
             return
         if op=="open":
+            file_bytes=response.get("file_bytes")
+            if type(file_bytes) is int and file_bytes >= 0:
+                self.size_label.setText(format_file_size(file_bytes))
+                self.size_label.setToolTip(
+                    f"元PDFの実際のファイル容量：{file_bytes:,} bytes"
+                )
             self._sizes=[tuple(p) for p in response["sizes"]]
             self.page_list.blockSignals(True)
             for i in range(len(self._sizes)):
