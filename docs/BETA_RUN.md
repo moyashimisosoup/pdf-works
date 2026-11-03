@@ -1,6 +1,6 @@
 # v5.0-beta Windows試験（開発ブランチ専用）
 
-**対象**：`feature/native-page-edit-20261017`。mainの動作確認済みalphaとは別の未検証版です。
+**対象**：mainに統合するWindows Qt beta。GitHub Actionsの人工PDF自動検証は成功していますが、利用者Windows PCでの全機能の手動受入は未完了です。
 
 ## 起動まで
 
@@ -8,7 +8,9 @@
 
 ```powershell
 git fetch origin
-git switch feature/native-page-edit-20261017
+git switch main
+git pull --ff-only origin main
+.\setup-pdf-works.cmd
 .\.venv\Scripts\python.exe -m pip install -e ".[desktop,dev]"
 # 初回セットアップだけ：公式Zen Maru Gothicを取得・検証し、アプリ専用フォルダへ配置
 .\.venv\Scripts\python.exe scripts/install_fonts.py
@@ -25,8 +27,8 @@ git switch feature/native-page-edit-20261017
 
 ```powershell
 git fetch origin
-git switch feature/native-page-edit-20261017
-git pull --ff-only origin feature/native-page-edit-20261017
+git switch main
+git pull --ff-only origin main
 .\.venv\Scripts\python.exe scripts/windows_beta_acceptance.py prepare
 .\.venv\Scripts\python.exe -m pdf_works
 ```
@@ -56,7 +58,7 @@ git pull --ff-only origin feature/native-page-edit-20261017
 現時点では**90°単位のみ**、ページの並べ替えは**上下ボタン**です。任意角度とドラッグ並べ替えはまだありません。
 
 ## エラーの場合
-PRレビュー・CI結果・実機結果が揃うまでmainへマージしません。
+mainへの統合はユーザーの明示的な指示に基づき、CI合格を条件として進めます。**実機受入はマージとは別**で、手動試験未実施を明確に記録します。
 詳細なWindows情報・失敗時の操作手順・個人情報を含まないログを記録し、原文書のPDFや生徒情報は公開リポジトリへ投稿しないでください。
 
 ## UIの書体・太さを実機で比較する
