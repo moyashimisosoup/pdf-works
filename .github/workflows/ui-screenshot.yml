@@ -7,6 +7,9 @@ on:
       - "src/pdf_works/core/optimize.py"
       - "src/pdf_works/workers/renderer.py"
       - "tests/test_optimize*.py"
+      - "start-pdf-works.cmd"
+      - "setup-pdf-works.cmd"
+      - "pyproject.toml"
       - "scripts/capture_ui.py"
       - "scripts/windows_beta_acceptance.py"
       - ".github/workflows/ui-screenshot.yml"
@@ -68,6 +71,11 @@ jobs:
         run: python -m pytest tests/test_optimize_e2e_ui.py -q
       - name: Test local Windows beta acceptance preparation and verification
         run: python -m pytest tests/test_windows_beta_acceptance.py -q
+      - name: Smoke-test Windows user launcher
+        env:
+          PDF_WORKS_PYTHON: ${{ env.pythonLocation }}\\python.exe
+        shell: cmd
+        run: call start-pdf-works.cmd --check
       - name: Capture Windows Qt widget pixels
         env:
           QT_QPA_PLATFORM: offscreen
