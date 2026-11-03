@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 import tempfile
 
+from .file_commit import publish_new_file
+
 
 def _pdf_signature(document) -> tuple:
     """A bounded semantic check for selected page and document features."""
@@ -95,7 +97,7 @@ def optimize_pdf_lossless(
             page_count = len(candidate)
         # Hard-link creation is exclusive even if another process created a file
         # after our initial preflight.
-        os.link(temp_name, dst)
+        publish_new_file(temp_name, dst)
         return {
             "before_bytes": source_size,
             "after_bytes": dst.stat().st_size,
