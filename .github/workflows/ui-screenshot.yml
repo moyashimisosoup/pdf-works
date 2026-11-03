@@ -5,8 +5,12 @@ on:
     paths:
       - "src/pdf_works/ui/**"
       - "src/pdf_works/core/optimize.py"
+      - "src/pdf_works/core/export.py"
+      - "src/pdf_works/core/file_commit.py"
+      - "src/pdf_works/core/roi_sheet.py"
       - "src/pdf_works/workers/renderer.py"
       - "tests/test_optimize*.py"
+      - "tests/test_windows_save_publish.py"
       - "start-pdf-works.cmd"
       - "setup-pdf-works.cmd"
       - "pyproject.toml"
@@ -61,6 +65,8 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/test_optimize_ui.py -q
+      - name: Test Save As Windows file-commit and edited PDF
+        run: python -m pytest tests/test_windows_save_publish.py tests/test_edit.py -q
       - name: Test Windows lossless PDF save and spawned worker
         run: python -m pytest tests/test_optimize.py tests/test_optimize_worker.py -q
       - name: Test raster and vector PDF visual fidelity
