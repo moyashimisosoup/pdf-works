@@ -4,11 +4,12 @@ Only call from the spawned PDF worker; never run image/PDF IO in Qt's event loop
 """
 from __future__ import annotations
 
-import os
 import struct
 from pathlib import Path
 import tempfile
 from typing import Sequence
+
+from .file_commit import publish_new_file
 
 ROWS, COLUMNS = 4, 2
 PER_SHEET = ROWS * COLUMNS
@@ -116,7 +117,7 @@ def save_roi_contact_sheet(
         with fitz.open(temp_name) as check:
             if len(check) != sheet_count:
                 raise RuntimeError("Contact sheet PDF page count mismatch")
-        os.link(temp_name, target)  # atomic create-if-absent
+        publish_new_file(temp_name, target)  # exclusive creation
         return sheet_count
     finally:
         if temp_name:
