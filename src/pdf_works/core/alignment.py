@@ -52,24 +52,42 @@ def placement(
     return (left, top, left + width, top + height)
 
 
-def _check_pdf(document, *, source: bool):
+def _check_pdf(document):
+    """Preview checks only: interactive metadata must not block comparison."""
     if document.needs_pass or document.is_encrypted or not document.is_pdf:
-        raise ValueError("Password-protected or non-PDF document cannot be aligned")
+        raise ValueError("暗号化・パスワード保護されたPDFは読み込めません")
     if not 1 <= len(document) <= MAX_PAGES:
-        raise ValueError(f"PDF must contain 1 to {MAX_PAGES} pages")
-    if source:
-        if (document.is_form_pdf or document.get_sigflags() > 0
-                or document.embfile_count() > 0):
-            raise ValueError(
-                "A contains forms, signatures or attachments which cannot "
-                "be preserved by alignment. Export was cancelled."
-            )
-        for i, page in enumerate(document):
-            if page.get_links() or list(page.annots() or ()) or list(page.widgets() or ()):
-                raise ValueError(
-                    f"A page {i + 1} contains annotations or links; "
-                    "alignment was cancelled to avoid deleting them."
-                )
+        raise ValueError(f"PDFのページ数は1～{MAX_PAGES}ページにしてください")
+
+
+def _visual_only_issues(document) -> list[str]:
+    """Describe content not automatically carried over by show_pdf_page.
+
+    A PDF may have an AcroForm dictionary but NO actual page widgets.
+    Treating is_form_pdf alone as fatal incorrectly rejects ordinary scans.
+    """
+    issues = []
+    if document.get_sigflags() > 0:
+        issues.append("signature")
+    if document.embfile_count() > 0:
+        issues.append("attachments")
+    found_links = found_annotations = found_widgets = False
+    for page in document:
+        if not found_links and page.get_links():
+            found_links = True
+        if not found_annotations and next(iter(page.annots() or ()), None) is not None:
+            found_annotations = True
+        if not found_widgets and next(iter(page.widgets() or ()), None) is not None:
+            found_widgets = True
+        if found_links and found_annotations and found_widgets:
+            break
+    if found_links:
+        issues.append("links")
+    if found_annotations:
+        issues.append("annotations")
+    if found_widgets:
+        issues.append("widgets")
+    return issues
 
 
 def inspect_pair(a_path: str | Path, b_path: str | Path) -> dict:
@@ -81,9 +99,10 @@ def inspect_pair(a_path: str | Path, b_path: str | Path) -> dict:
     if not a.is_file() or not b.is_file():
         raise ValueError("Choose two PDF files")
     with fitz.open(a) as da, fitz.open(b) as db:
-        _check_pdf(da, source=True)
-        _check_pdf(db, source=False)
+        _check_pdf(da)
+        _check_pdf(db)
         return {
+            "source_issues": _visual_only_issues(da),
             "source_pages": len(da),
             "reference_pages": len(db),
             "source_size": (da[0].rect.width, da[0].rect.height),
@@ -122,8 +141,9 @@ def export_aligned(
     percent: float = 100.0,
     x_mm: float = 0.0,
     y_mm: float = 0.0,
+    allow_visual_only: bool = False,
 ) -> dict:
-    """Place all pages of A on B-sized pages without touching either input."""
+    """Place A's visible contents on B-sized pages without touching inputs."""
     import fitz
 
     a = Path(a_path).resolve(strict=True)
@@ -143,8 +163,22 @@ def export_aligned(
     temp_name: str | None = None
     try:
         with fitz.open(a) as source, fitz.open(b) as reference:
-            _check_pdf(source, source=True)
-            _check_pdf(reference, source=False)
+            _check_pdf(source)
+            _check_pdf(reference)
+            issues = _visual_only_issues(source)
+            if "signature" in issues:
+                raise ValueError(
+                    "Aには電子署名が含まれます。署名の有効性を守るため出力を中止しました。"
+                )
+            if issues and not allow_visual_only:
+                raise ValueError(
+                    "Aにはフォーム・注釈・リンク・添付などが含まれます。"
+                    "比較画面の「表示内容だけを新規PDFに固定」に同意してから保存してください。"
+                )
+            if "widgets" in issues or "annotations" in issues:
+                # Bake the visible appearance in the in-memory copy only.
+                # The original source PDF on disk is NEVER modified.
+                source.bake(annots=True, widgets=True)
             ref_size = (reference[0].rect.width, reference[0].rect.height)
             first_size = (source[0].rect.width, source[0].rect.height)
             page_count = len(source)

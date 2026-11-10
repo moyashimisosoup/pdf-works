@@ -81,6 +81,7 @@ def run_worker(requests: Any, results: Any) -> None:
                     req["source"], req["reference"], req["destination"],
                     percent=float(req["percent"]),
                     x_mm=float(req["x_mm"]), y_mm=float(req["y_mm"]),
+                    allow_visual_only=bool(req.get("allow_visual_only", False)),
                 )
                 response.update(
                     status="ok", destination=req["destination"], **details,

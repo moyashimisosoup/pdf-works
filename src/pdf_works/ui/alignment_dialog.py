@@ -10,7 +10,7 @@ from pathlib import Path
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
+    QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
     QHBoxLayout, QLabel, QMessageBox, QPushButton, QSlider,
     QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
@@ -196,6 +196,24 @@ class AlignmentDialog(QDialog):
         settings_row.addStretch(1)
         root.addWidget(settings)
 
+        # Only show this consent when A really contains interactive objects.
+        # A bare AcroForm dictionary with zero widgets is not a reason to block.
+        self.visual_warning = QLabel("")
+        self.visual_warning.setWordWrap(True)
+        self.visual_warning.setStyleSheet("color:#94602F;")
+        self.visual_warning.hide()
+        root.addWidget(self.visual_warning)
+        self.visual_consent = QCheckBox(
+            "入力欄・注釈などを表示内容として固定し、リンク・添付情報を省いた"
+            "新しいPDFを作成する"
+        )
+        self.visual_consent.setToolTip(
+            "Aの元PDFは変更しません。新しいPDFは印刷用の見た目を優先します。"
+        )
+        self.visual_consent.toggled.connect(lambda *_: self._controls())
+        self.visual_consent.hide()
+        root.addWidget(self.visual_consent)
+
         footer = QHBoxLayout()
         self.message = QLabel("AとBを選択してください。元ファイルは変更しません。")
         self.message.setStyleSheet("color:#726A95;")
@@ -225,7 +243,14 @@ class AlignmentDialog(QDialog):
         self.opacity.setEnabled(
             ready and not self._exporting and self.mode.currentIndex() == 1
         )
-        self.save_button.setEnabled(ready and not self._exporting)
+        issues = self._details.get("source_issues", []) if self._details else []
+        signed = "signature" in issues
+        needs_consent = bool(issues) and not signed
+        self.visual_consent.setEnabled(ready and not self._exporting)
+        self.save_button.setEnabled(
+            ready and not self._exporting and not signed
+            and (not needs_consent or self.visual_consent.isChecked())
+        )
 
     def _choose(self, which: str):
         if self._exporting:
@@ -247,6 +272,9 @@ class AlignmentDialog(QDialog):
         label.setToolTip(str(path))
         self._details = None
         self._images = {}
+        self.visual_consent.setChecked(False)
+        self.visual_consent.hide()
+        self.visual_warning.hide()
         self._controls()
         if self._source is not None and self._reference is not None:
             self._request_preview()
@@ -294,6 +322,7 @@ class AlignmentDialog(QDialog):
                 "reference_size": tuple(reply["reference_size"]),
                 "source_pages": int(reply["source_pages"]),
                 "reference_pages": int(reply["reference_pages"]),
+                "source_issues": list(reply.get("source_issues", [])),
             }
             try:
                 self._images = {
@@ -309,7 +338,30 @@ class AlignmentDialog(QDialog):
                 f"A全{self._details['source_pages']}ページを出力 / "
                 "表示比較は各1ページ目"
             )
-            self.message.setText("倍率・位置を調整してAだけを保存できます")
+            issues = self._details["source_issues"]
+            self.visual_consent.setChecked(False)
+            if "signature" in issues:
+                self.visual_warning.setText(
+                    "Aには電子署名が含まれています。比較表示はできますが、"
+                    "署名の有効性を保護するため、この画面では書き出せません。"
+                )
+                self.visual_warning.show()
+                self.visual_consent.hide()
+                self.message.setText("電子署名付きAは比較のみ可能です")
+            elif issues:
+                self.visual_warning.setText(
+                    "AのPDFにフォーム入力欄・注釈・リンク・添付ファイルの"
+                    "いずれかが含まれています。比較は可能です。"
+                    "別名出力では画面に見える内容を固定し、"
+                    "リンク・添付・編集可能な入力欄は引き継ぎません。"
+                )
+                self.visual_warning.show()
+                self.visual_consent.show()
+                self.message.setText("表示内容の固定に同意すると別名保存できます")
+            else:
+                self.visual_warning.hide()
+                self.visual_consent.hide()
+                self.message.setText("倍率・位置を調整してAだけを保存できます")
             self._controls()
             self._redraw()
         elif op == "align_export":
@@ -414,6 +466,9 @@ class AlignmentDialog(QDialog):
     def _save(self):
         if not self._details or self._exporting:
             return
+        issues = self._details.get("source_issues", [])
+        if "signature" in issues or (issues and not self.visual_consent.isChecked()):
+            return
         suggestion = str(self._source.with_name(self._source.stem + "_aligned.pdf"))
         name, _ = QFileDialog.getSaveFileName(
             self, "調整済みAを別名保存", suggestion, "PDF (*.pdf)",
@@ -435,6 +490,7 @@ class AlignmentDialog(QDialog):
             reference=str(self._reference),
             destination=str(target), percent=self.scale.value(),
             x_mm=self.x_offset.value(), y_mm=self.y_offset.value(),
+            allow_visual_only=self.visual_consent.isChecked(),
         )
         if rid is None:
             QMessageBox.warning(self, "処理中", "PDF処理が混雑しています。")

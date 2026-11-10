@@ -82,3 +82,54 @@ def test_one_pair_dialog_controls_and_worker_payload(app, tmp_path, monkeypatch)
         dialog._exporting = False
         dialog.close()
         app.processEvents()
+
+
+def test_form_preview_requires_explicit_visual_only_consent(app, monkeypatch, tmp_path):
+    monkeypatch.setattr(PdfBridge, "start", lambda self: None)
+    dialog = AlignmentDialog()
+    dialog.show()
+    app.processEvents()
+    try:
+        dialog._source = tmp_path / "form.pdf"
+        dialog._reference = tmp_path / "reference.pdf"
+        a = bytes([225, 70, 60] * 12)
+        b = bytes([240, 240, 245] * 20)
+        response = {
+            "op": "align_preview", "status": "ok",
+            "source_pages": 1, "reference_pages": 1,
+            "source_size": (300, 400), "reference_size": (310, 430),
+            "images": {
+                "a": {"width": 3, "height": 4, "stride": 9, "samples": a},
+                "b": {"width": 4, "height": 5, "stride": 12, "samples": b},
+            },
+        }
+        dialog._preview_request = 9
+        dialog._receive({**response, "id": 9, "source_issues": ["widgets"]})
+        assert dialog.visual_warning.isVisible()
+        assert dialog.visual_consent.isVisible()
+        assert not dialog.save_button.isEnabled()
+        dialog.visual_consent.setChecked(True)
+        assert dialog.save_button.isEnabled()
+        target = tmp_path / "visual_only.pdf"
+        monkeypatch.setattr(
+            QFileDialog, "getSaveFileName",
+            lambda *args: (str(target), "PDF (*.pdf)"),
+        )
+        requests = []
+        monkeypatch.setattr(
+            dialog._bridge, "send",
+            lambda op, **kw: requests.append((op, kw)) or 23,
+        )
+        dialog._save()
+        assert requests[0][1]["allow_visual_only"] is True
+        dialog._exporting = False
+
+        dialog._preview_request = 10
+        dialog._receive({**response, "id": 10, "source_issues": ["signature"]})
+        assert dialog.visual_warning.isVisible()
+        assert not dialog.save_button.isEnabled()
+        assert not dialog.visual_consent.isVisible()
+    finally:
+        dialog._exporting = False
+        dialog.close()
+        app.processEvents()
