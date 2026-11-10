@@ -110,18 +110,18 @@ def inspect_pair(a_path: str | Path, b_path: str | Path) -> dict:
         }
 
 
-def render_pair(a_path: str | Path, b_path: str | Path, width: int = 600) -> dict:
+def render_pair(a_path: str | Path, b_path: str | Path, width: int = 1050) -> dict:
     """Bounded low-resolution first-page previews for both documents."""
     import fitz
 
-    if type(width) is not int or not 100 <= width <= 800:
+    if type(width) is not int or not 100 <= width <= 1200:
         raise ValueError("Invalid preview width")
     details = inspect_pair(a_path, b_path)
     images = {}
     for key, filename in (("a", a_path), ("b", b_path)):
         with fitz.open(filename) as document:
             page = document[0]
-            factor = min(width / max(page.rect.width, 1.0), 900 / max(page.rect.height, 1.0))
+            factor = min(width / max(page.rect.width, 1.0), 1600 / max(page.rect.height, 1.0))
             pix = page.get_pixmap(
                 matrix=fitz.Matrix(factor, factor),
                 colorspace=fitz.csRGB,
