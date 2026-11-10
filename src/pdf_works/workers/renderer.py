@@ -69,7 +69,23 @@ def run_worker(requests: Any, results: Any) -> None:
         response={"id":req.get("id"),"op":op,"generation":req.get("generation"),
                   "slot":req.get("slot"),"epoch":req.get("epoch")}
         try:
-            if op=="open":
+            if op=="align_preview":
+                from ..core.alignment import render_pair
+                response.update(
+                    status="ok",
+                    **render_pair(req["source"], req["reference"]),
+                )
+            elif op=="align_export":
+                from ..core.alignment import export_aligned
+                details = export_aligned(
+                    req["source"], req["reference"], req["destination"],
+                    percent=float(req["percent"]),
+                    x_mm=float(req["x_mm"]), y_mm=float(req["y_mm"]),
+                )
+                response.update(
+                    status="ok", destination=req["destination"], **details,
+                )
+            elif op=="open":
                 if document is not None:
                     document.close()
                     document=None
