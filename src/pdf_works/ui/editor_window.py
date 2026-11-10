@@ -769,6 +769,28 @@ class EditWindow(MainWindow):
                 if not rows:
                     return
                 self._session.set_fine_many(rows, action[1])
+                # Keep arrow clicks responsive: no full list rebuild, no
+                # reloading thumbnails on unaffected pages.
+                self._edit_epoch += 1
+                self._latest_image_req = None
+                self._pending_thumbs.clear()
+                self._thumb_queue.clear()
+                for row in rows:
+                    page = self._session.pages[row]
+                    mark = f" ↻{page.rotation_delta}°" if page.rotation_delta else ""
+                    if page.fine_tenths:
+                        mark += f" ∠{page.fine_tenths / 10.0:+.1f}°"
+                    self.page_list.item(row).setText(
+                        f"元{page.source_index + 1}{mark}"
+                    )
+                    self.page_list.item(row).setIcon(QIcon())
+                    self._thumb_ready.discard(row)
+                self.viewer.set_fine_rotation(
+                    self._session.pages[self._current_page].fine_tenths / 10.0
+                )
+                self._schedule_thumbnails()
+                self._update_controls()
+                return
             elif operation == "delete":
                 if not rows:
                     return
