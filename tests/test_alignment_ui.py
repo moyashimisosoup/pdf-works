@@ -8,6 +8,8 @@ import sys
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 pytest.importorskip("PySide6")
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -51,6 +53,38 @@ def test_one_pair_dialog_controls_and_worker_payload(app, tmp_path, monkeypatch)
         dialog._redraw()
         assert dialog.display.currentIndex() == 1
         assert not dialog.overlay_preview.pixmap().isNull()
+        # Display zoom changes only the view, not the PDF transformation.
+        initial_scale = dialog.scale.value()
+        normal_view = dialog.overlay_preview.transform().m11()
+        dialog.zoom_combo.setCurrentIndex(dialog.zoom_combo.findData(300))
+        app.processEvents()
+        assert dialog.overlay_preview.transform().m11() > normal_view
+        assert dialog.scale.value() == initial_scale
+        dialog.zoom_combo.setCurrentIndex(dialog.zoom_combo.findData(100))
+        app.processEvents()
+
+        # Grab A at its visible center. Dragging moves A in physical mm,
+        # reflected in the exact values forwarded to the export worker.
+        dialog.scale.setValue(100)
+        dialog.x_offset.setValue(0)
+        dialog.y_offset.setValue(0)
+        dialog._redraw()
+        app.processEvents()
+        canvas = dialog.overlay_preview
+        centre = canvas.mapFromScene(canvas._a_item.sceneBoundingRect().center())
+        before_b = canvas._b_item.pos()
+        QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=centre)
+        QTest.mouseMove(canvas.viewport(), pos=centre + QPoint(24, 18))
+        QTest.mouseRelease(
+            canvas.viewport(), Qt.MouseButton.LeftButton,
+            pos=centre + QPoint(24, 18),
+        )
+        assert dialog.x_offset.value() > 0
+        assert dialog.y_offset.value() > 0
+        assert canvas._b_item.pos() == before_b
+        dialog.scale.setValue(102.5)
+        dialog.x_offset.setValue(1.5)
+        dialog.y_offset.setValue(-2.0)
         target = tmp_path / "output.pdf"
         monkeypatch.setattr(
             QFileDialog, "getSaveFileName",
