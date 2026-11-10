@@ -10,6 +10,7 @@ on:
       - "src/pdf_works/core/roi_sheet.py"
       - "src/pdf_works/workers/renderer.py"
       - "tests/test_optimize*.py"
+      - "tests/test_fine_tilt*.py"
       - "tests/test_windows_save_publish.py"
       - "start-pdf-works.cmd"
       - "setup-pdf-works.cmd"
@@ -67,6 +68,10 @@ jobs:
         run: python -m pytest tests/test_optimize_ui.py -q
       - name: Test Save As Windows file-commit and edited PDF
         run: python -m pytest tests/test_windows_save_publish.py tests/test_edit.py -q
+      - name: Test page fine-tilt core and Qt controls
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_fine_tilt.py tests/test_fine_tilt_ui.py -q
       - name: Test Windows lossless PDF save and spawned worker
         run: python -m pytest tests/test_optimize.py tests/test_optimize_worker.py -q
       - name: Test raster and vector PDF visual fidelity
