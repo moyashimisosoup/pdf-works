@@ -12,7 +12,7 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
     QHBoxLayout, QLabel, QMessageBox, QPushButton, QSlider,
-    QStackedWidget, QVBoxLayout, QWidget,
+    QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from ..core.alignment import placement
@@ -50,6 +50,7 @@ class AlignmentDialog(QDialog):
         label = QLabel(message)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setMinimumSize(180, 270)
+        label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         label.setStyleSheet(
             "background:#FFFFFF;border:1px solid #D8D0D4;"
             "border-radius:10px;color:#726A95;"
