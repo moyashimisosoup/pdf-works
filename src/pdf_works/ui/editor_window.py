@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QDialog, QFileDialog, QHBoxLay
     QLabel, QMessageBox, QPushButton, QListWidgetItem, QDoubleSpinBox)
 from .main_window import MainWindow
 from .roi_gallery import CropGallery
+from .alignment_dialog import AlignmentDialog
 from .split_dialog import SplitGroupsDialog
 from ..core.page_edit import EditSession
 from ..core.page_extract import selected_page_specs
@@ -39,6 +40,7 @@ class EditWindow(MainWindow):
         self._save_request = None
         self._saved_snapshot: list[tuple[int, int]] | None = None
         self._saved_fine: list[int] | None = None
+        self._alignment_dialog = None
         super().__init__()
         self.setWindowTitle("pdf-works | Page editor beta")
 
@@ -104,12 +106,36 @@ class EditWindow(MainWindow):
         self.save_button = QPushButton("別名保存")
         self.save_button.setObjectName("primary")
         self.save_button.clicked.connect(self._save_as)
-        self.centralWidget().layout().itemAt(0).layout().insertWidget(2, self.save_button)
+        header = self.centralWidget().layout().itemAt(0).layout()
+        header.addWidget(self.save_button)
+        self.align_button = QPushButton("A/B 縮尺合わせ")
+        self.align_button.setToolTip("取り込み側Aを見本Bに重ねて合わせ、Aだけ別名保存")
+        self.align_button.setMinimumWidth(
+            self.align_button.sizeHint().width() + 16
+        )
+        self.align_button.clicked.connect(self._open_alignment)
+        header.addWidget(self.align_button)
         self._setup_roi_tools()
         self._setup_page_export_tools()
         self._setup_optimization_tools()
         self._setup_keyboard_shortcuts()
         self._update_controls()
+
+    def _open_alignment(self):
+        if self._page_output_busy():
+            return
+        dialog = self._alignment_dialog
+        if dialog is not None and dialog.isVisible():
+            dialog.raise_()
+            dialog.activateWindow()
+            return
+        dialog = AlignmentDialog(self)
+        dialog.setModal(True)
+        self._alignment_dialog = dialog
+        dialog.destroyed.connect(
+            lambda *_: setattr(self, "_alignment_dialog", None)
+        )
+        dialog.show()
 
     def _on_fine_tilt(self, degrees: float):
         if self._session is None or self._page_output_busy():
@@ -845,6 +871,7 @@ class EditWindow(MainWindow):
                 active = ready and self._session.can_undo
             button.setEnabled(active)
         self.save_button.setEnabled(ready)
+        self.align_button.setEnabled(not self._page_output_busy())
         for item in (self.fine_left, self.fine_right, self.fine_spin):
             item.setEnabled(ready and bool(rows))
         self._sync_fine_controls()
