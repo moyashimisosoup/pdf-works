@@ -60,6 +60,7 @@ class AlignmentCanvas(QGraphicsView):
         self._a_item = self.scene().addPixmap(QPixmap.fromImage(source))
         self._b_item.setZValue(0)
         self._a_item.setZValue(1)
+        self.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
         self._b_item.setTransformationMode(
             Qt.TransformationMode.SmoothTransformation
         )
@@ -75,6 +76,7 @@ class AlignmentCanvas(QGraphicsView):
         self._a_item = None
         self._reference_size = None
         self._drag_from = None
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
     def set_zoom_percent(self, percent: int):
         if not 50 <= percent <= 600:
@@ -158,7 +160,7 @@ class AlignmentCanvas(QGraphicsView):
     def mouseReleaseEvent(self, event):
         if self._drag_from is not None:
             self._drag_from = None
-            self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+            self.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
             event.accept()
             return
         super().mouseReleaseEvent(event)
