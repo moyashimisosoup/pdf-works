@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.alignment import placement
+from .alignment_canvas import AlignmentCanvas
 from ..workers.bridge import PdfBridge
 
 
@@ -70,7 +71,10 @@ class AlignmentDialog(QDialog):
         line = QHBoxLayout()
         name = QLabel("PDFを選択")
         name.setStyleSheet("color:#726A95;")
-        name.setMinimumWidth(90)
+        name.setMinimumWidth(0)
+        name.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         name.setToolTip("元ファイルは変更しません")
         line.addWidget(name, 1)
         select = QPushButton(button_title)
@@ -90,6 +94,10 @@ class AlignmentDialog(QDialog):
         heading.addWidget(title)
         hint = QLabel("Aの縮尺・位置をBに合わせて、調整済みAだけを新規PDFに保存")
         hint.setStyleSheet("color:#726A95;")
+        hint.setWordWrap(True)
+        hint.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         heading.addWidget(hint, 1)
         root.addLayout(heading)
 
@@ -129,10 +137,32 @@ class AlignmentDialog(QDialog):
         self.opacity_value.setMinimumWidth(38)
         display_row.addWidget(self.opacity_value)
         display_row.addStretch(1)
+        display_row.addWidget(QLabel("表示拡大"))
+        self.zoom_combo = QComboBox()
+        for percent in (50, 75, 100, 150, 200, 300, 400, 600):
+            self.zoom_combo.addItem(f"{percent}%", percent)
+        self.zoom_combo.setCurrentIndex(2)
+        self.zoom_combo.setToolTip(
+            "重ね表示だけを拡大。PDFの実際の縮尺は変更しません"
+        )
+        self.zoom_combo.setMinimumWidth(90)
+        self.zoom_combo.currentIndexChanged.connect(self._change_zoom)
+        display_row.addWidget(self.zoom_combo)
+        self.maximize_button = QPushButton("画面を最大化")
+        self.maximize_button.setMinimumWidth(112)
+        self.maximize_button.clicked.connect(self._toggle_maximize)
+        display_row.addWidget(self.maximize_button)
+        root.addLayout(display_row)
+
+        info_row = QHBoxLayout()
         self.page_info = QLabel("各PDFの1ページ目を比較")
         self.page_info.setStyleSheet("color:#726A95;")
-        display_row.addWidget(self.page_info)
-        root.addLayout(display_row)
+        info_row.addWidget(self.page_info)
+        info_row.addStretch(1)
+        self.drag_hint = QLabel("重ね表示中：Aをドラッグして移動／拡大時はスクロールで移動")
+        self.drag_hint.setStyleSheet("color:#726A95;")
+        info_row.addWidget(self.drag_hint)
+        root.addLayout(info_row)
 
         self.display = QStackedWidget()
         side = QWidget()
@@ -154,8 +184,9 @@ class AlignmentDialog(QDialog):
         overlay = QWidget()
         overlay_layout = QVBoxLayout(overlay)
         overlay_layout.setContentsMargins(0, 0, 0, 0)
-        overlay_layout.addWidget(QLabel("重ね合わせ：Bを固定し、Aだけを調整"))
-        self.overlay_preview = self._preview_label("AとBのPDFを選択してください")
+        overlay_layout.addWidget(QLabel("重ね合わせ｜Bは固定、Aの上をドラッグして位置を調整"))
+        self.overlay_preview = AlignmentCanvas()
+        self.overlay_preview.moved_mm.connect(self._drag_a)
         overlay_layout.addWidget(self.overlay_preview, 1)
         self.display.addWidget(overlay)
         root.addWidget(self.display, 1)
@@ -179,8 +210,8 @@ class AlignmentDialog(QDialog):
             (self.x_offset, "横"), (self.y_offset, "縦")
         ):
             spin.setRange(-100.0, 100.0)
-            spin.setDecimals(1)
-            spin.setSingleStep(0.5)
+            spin.setDecimals(2)
+            spin.setSingleStep(0.1)
             spin.setSuffix(" mm")
             spin.setToolTip(f"Aの{text}方向への移動量（ミリメートル）")
         for name, control in (
@@ -240,9 +271,10 @@ class AlignmentDialog(QDialog):
             self.mode, self.opacity,
         ):
             widget.setEnabled(ready and not self._exporting)
-        self.opacity.setEnabled(
-            ready and not self._exporting and self.mode.currentIndex() == 1
-        )
+        overlay_ready = ready and not self._exporting and self.mode.currentIndex() == 1
+        self.opacity.setEnabled(overlay_ready)
+        self.zoom_combo.setEnabled(overlay_ready)
+        self.overlay_preview.setEnabled(overlay_ready)
         issues = self._details.get("source_issues", []) if self._details else []
         signed = "signature" in issues
         needs_consent = bool(issues) and not signed
@@ -272,6 +304,7 @@ class AlignmentDialog(QDialog):
         label.setToolTip(str(path))
         self._details = None
         self._images = {}
+        self.overlay_preview.clear_pages()
         self.visual_consent.setChecked(False)
         self.visual_consent.hide()
         self.visual_warning.hide()
@@ -285,7 +318,7 @@ class AlignmentDialog(QDialog):
         self.message.setText("プレビューを作成しています…")
         self.a_preview.setText("読み込み中…")
         self.b_preview.setText("読み込み中…")
-        self.overlay_preview.setText("読み込み中…")
+        self.overlay_preview.clear_pages()
         rid = self._bridge.send(
             "align_preview", source=str(self._source),
             reference=str(self._reference),
@@ -334,6 +367,13 @@ class AlignmentDialog(QDialog):
                 self._images = {}
                 self.message.setText("プレビュー画像を表示できません")
                 return
+            self.overlay_preview.set_pages(
+                self._images["a"], self._images["b"],
+                self._details["reference_size"],
+            )
+            self.overlay_preview.set_zoom_percent(
+                int(self.zoom_combo.currentData())
+            )
             self.page_info.setText(
                 f"A全{self._details['source_pages']}ページを出力 / "
                 "表示比較は各1ページ目"
@@ -398,7 +438,28 @@ class AlignmentDialog(QDialog):
 
     def _opacity_changed(self, value: int):
         self.opacity_value.setText(f"{value}%")
+        self.overlay_preview.set_opacity_percent(value)
         self._schedule_redraw()
+
+    def _change_zoom(self, *_):
+        self.overlay_preview.set_zoom_percent(int(self.zoom_combo.currentData()))
+
+    def _toggle_maximize(self):
+        if self.isMaximized():
+            self.showNormal()
+            self.maximize_button.setText("画面を最大化")
+        else:
+            self.showMaximized()
+            self.maximize_button.setText("通常サイズ")
+
+    def _drag_a(self, dx_mm: float, dy_mm: float):
+        """Drag the A layer, not B; mirror actual mm offsets in number fields."""
+        if not self._details or self._exporting or self.mode.currentIndex() != 1:
+            return
+        self.x_offset.setValue(self.x_offset.value() + dx_mm)
+        self.y_offset.setValue(self.y_offset.value() + dy_mm)
+        # QGraphicsView moves only the A item, without re-rendering either PDF.
+        self._redraw()
 
     def _schedule_redraw(self, *_):
         if self._images:
@@ -451,12 +512,15 @@ class AlignmentDialog(QDialog):
     def _redraw(self):
         if not self._details or not self._images:
             return
-        self._fit(self.a_preview, self._compose(opacity=1.0, background=False))
-        self._fit(self.b_preview, self._images["b"])
-        self._fit(
-            self.overlay_preview,
-            self._compose(opacity=self.opacity.value() / 100.0, background=True),
+        rect = placement(
+            self._details["source_size"], self._details["reference_size"],
+            self.scale.value(), self.x_offset.value(), self.y_offset.value(),
         )
+        self.overlay_preview.set_placement(rect)
+        self.overlay_preview.set_opacity_percent(self.opacity.value())
+        if self.mode.currentIndex() == 0:
+            self._fit(self.a_preview, self._compose(opacity=1.0, background=False))
+            self._fit(self.b_preview, self._images["b"])
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
