@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - "src/pdf_works/ui/**"
+      - "src/pdf_works/core/alignment.py"
       - "src/pdf_works/core/optimize.py"
       - "src/pdf_works/core/export.py"
       - "src/pdf_works/core/file_commit.py"
       - "src/pdf_works/core/roi_sheet.py"
       - "src/pdf_works/workers/renderer.py"
       - "tests/test_optimize*.py"
+      - "tests/test_alignment*.py"
       - "tests/test_fine_tilt*.py"
       - "tests/test_windows_save_publish.py"
       - "start-pdf-works.cmd"
@@ -72,6 +74,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/test_fine_tilt.py tests/test_fine_tilt_ui.py -q
+      - name: Test one-pair A/B alignment and overlay dialog
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_alignment.py tests/test_alignment_ui.py -q
       - name: Test Windows lossless PDF save and spawned worker
         run: python -m pytest tests/test_optimize.py tests/test_optimize_worker.py -q
       - name: Test raster and vector PDF visual fidelity
