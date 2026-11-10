@@ -857,7 +857,11 @@ class EditWindow(MainWindow):
         self.split_button.setEnabled(ready and bool(rows) and not has_tilt)
         self.groups_button.setEnabled(ready and total > 1 and not has_tilt)
         self.optimize_button.setEnabled(
-            ready and bool(self._pdf_path) and not self._dirty()
+            ready and bool(self._pdf_path) and not self._dirty() and not has_tilt
+        )
+        self.optimize_button.setToolTip(
+            "傾き微調整したPDFは別名保存し、そのファイルを開き直してから最適化してください"
+            if has_tilt else "元PDFを品質維持で最適化"
         )
         self.open_button.setEnabled(ready or self._session is None)
         if hasattr(self, "roi_toggle"):
