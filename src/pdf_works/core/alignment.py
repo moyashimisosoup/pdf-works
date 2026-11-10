@@ -86,8 +86,8 @@ def inspect_pair(a_path: str | Path, b_path: str | Path) -> dict:
         return {
             "source_pages": len(da),
             "reference_pages": len(db),
-            "source_size": tuple(da[0].rect)[2:],
-            "reference_size": tuple(db[0].rect)[2:],
+            "source_size": (da[0].rect.width, da[0].rect.height),
+            "reference_size": (db[0].rect.width, db[0].rect.height),
         }
 
 
@@ -147,6 +147,7 @@ def export_aligned(
             _check_pdf(reference, source=False)
             ref_size = (reference[0].rect.width, reference[0].rect.height)
             first_size = (source[0].rect.width, source[0].rect.height)
+            page_count = len(source)
             # Reject invalid inputs before creating a file.
             placement(first_size, ref_size, percent, x_mm, y_mm)
             with fitz.open() as result:
@@ -168,7 +169,7 @@ def export_aligned(
                     temp_name = tmp.name
                 result.save(temp_name, garbage=1, deflate=False)
         with fitz.open(temp_name) as check:
-            if len(check) != len(source):
+            if len(check) != page_count:
                 raise RuntimeError("Aligned PDF page count mismatch")
             if any(
                 abs(page.rect.width - ref_size[0]) > 0.1
@@ -177,7 +178,7 @@ def export_aligned(
             ):
                 raise RuntimeError("Output page size mismatch")
         publish_new_file(temp_name, target)
-        return {"pages": len(source), "bytes": target.stat().st_size}
+        return {"pages": page_count, "bytes": target.stat().st_size}
     finally:
         if temp_name is not None:
             Path(temp_name).unlink(missing_ok=True)
