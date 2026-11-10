@@ -110,7 +110,9 @@ def save_edited_pdf(
                                 page = output.new_page(width=width, height=height)
                                 page.show_pdf_page(
                                     page.rect, tilted, source_indices[slot],
-                                    rotate=float(pages[slot][1] + fine[slot] / 10.0),
+                                    # show_pdf_page positive angles are counterclockwise;
+                                    # Qt and page.set_rotation positive are clockwise.
+                                    rotate=-float(pages[slot][1] + fine[slot] / 10.0),
                                     keep_proportion=True,
                                 )
                                 # Any orientation is baked into the visible
