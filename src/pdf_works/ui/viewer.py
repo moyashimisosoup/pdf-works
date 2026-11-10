@@ -4,6 +4,7 @@ Images still arrive from the separate PDF process. Region selection is a
 lightweight QGraphicsRectItem overlay, never a full-resolution crop on the UI thread.
 """
 from __future__ import annotations
+import math
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QPen, QPixmap, QTransform
@@ -22,6 +23,7 @@ class PdfViewer(QGraphicsView):
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.setStyleSheet("QGraphicsView { background:#FCFBF7; border:0px; }")
         self._zoom = 1.0
+        self._fine_degrees = 0.0
         self._dimensions: tuple[float, float] | None = None
         self._pixitem: QGraphicsPixmapItem | None = None
         self._roi_item: QGraphicsRectItem | None = None
@@ -89,6 +91,7 @@ class PdfViewer(QGraphicsView):
         self._pixitem = None
         self._roi_item = None
         self._dimensions = None
+        self._fine_degrees = 0.0
         self._roi = None
         self._drag_start = None
         self.roi_changed.emit(())
@@ -99,6 +102,34 @@ class PdfViewer(QGraphicsView):
         self._zoom = value
         self.setTransform(QTransform.fromScale(value, value))
         self._schedule()
+
+    def set_fine_rotation(self, degrees: float):
+        """Preview deskew around page center, preserving the source pixels."""
+        self._fine_degrees = float(degrees)
+        self._position_pixmap()
+        self._schedule()
+
+    def _position_pixmap(self):
+        if self._pixitem is None or not self._dimensions:
+            return
+        width, height = self._dimensions
+        # Rendered clipped image location / scale from the PDF worker.
+        x, y, resolution = self._render_origin
+        center_x, center_y = width / 2.0, height / 2.0
+        radians = math.radians(self._fine_degrees)
+        c, sn = abs(math.cos(radians)), abs(math.sin(radians))
+        # Match show_pdf_page(keep_proportion=True): keep the entire rotated
+        # source inside the original page without cropping its corners.
+        factor = min(
+            width / max(0.1, width * c + height * sn),
+            height / max(0.1, width * sn + height * c),
+        )
+        self._pixitem.setOffset(
+            (x - center_x) * resolution, (y - center_y) * resolution
+        )
+        self._pixitem.setPos(center_x, center_y)
+        self._pixitem.setScale(factor / resolution)
+        self._pixitem.setRotation(self._fine_degrees)
 
     def _schedule(self, *args):
         if self._dimensions:
@@ -113,6 +144,8 @@ class PdfViewer(QGraphicsView):
             return
         viewport = self.mapToScene(self.viewport().rect()).boundingRect()
         margin = 40.0 / self._zoom
+        if self._fine_degrees:
+            margin += max(self._dimensions) * abs(math.sin(math.radians(self._fine_degrees)))
         bounds = QRectF(0, 0, *self._dimensions)
         region = viewport.adjusted(-margin, -margin, margin, margin).intersected(bounds)
         if region.isEmpty():
@@ -131,8 +164,8 @@ class PdfViewer(QGraphicsView):
         if self._pixitem is not None:
             self.scene().removeItem(self._pixitem)
         self._pixitem = self.scene().addPixmap(pixmap)
-        self._pixitem.setPos(x, y)
-        self._pixitem.setScale(1.0 / scale)
+        self._render_origin = (x, y, scale)
+        self._position_pixmap()
         self._pixitem.setZValue(1)
         self._draw_roi()
 
