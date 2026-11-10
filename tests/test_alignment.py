@@ -76,6 +76,6 @@ def test_existing_and_annotated_pdfs_are_protected(tmp_path):
     with fitz.open(a) as source:
         source[0].add_text_annot((70, 70), "Do not lose this")
         source.save(tmp_path / "annotated.pdf")
-    with pytest.raises(ValueError, match="annotations or links"):
+    with pytest.raises(ValueError, match="表示内容だけ"):
         export_aligned(tmp_path / "annotated.pdf", b, tmp_path / "unsafe.pdf")
     assert not (tmp_path / "unsafe.pdf").exists()
