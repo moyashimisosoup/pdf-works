@@ -101,7 +101,8 @@ def run_worker(requests: Any, results: Any) -> None:
                 if document is None or req.get("generation")!=generation:
                     raise RuntimeError("PDF document is not open")
                 from ..core.export import save_edited_pdf
-                count=save_edited_pdf(req["path"],req["destination"],req["pages"])
+                count=save_edited_pdf(req["path"],req["destination"],req["pages"],
+                                      fine_angles=req.get("fine_angles"))
                 response.update(status="ok",count=count,destination=req["destination"])
             elif op=="optimize_lossless":
                 if document is None or req.get("generation") != generation:

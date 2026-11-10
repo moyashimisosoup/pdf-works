@@ -7,6 +7,7 @@ from dataclasses import dataclass
 class PageSpec:
     source_index: int
     rotation_delta: int = 0
+    fine_tenths: int = 0
 
 
 class EditSession:
@@ -51,7 +52,26 @@ class EditSession:
         for index in selected:
             item = self._pages[index]
             self._pages[index] = PageSpec(
-                item.source_index, (item.rotation_delta + degrees) % 360)
+                item.source_index, (item.rotation_delta + degrees) % 360, item.fine_tenths)
+
+    def set_fine_many(self, indices: list[int] | tuple[int, ...], tenths: int):
+        """Set the residual page tilt, in tenths of a degree (-10 to +10°)."""
+        if type(tenths) is not int or not -100 <= tenths <= 100:
+            raise ValueError("Fine tilt must be between -10.0° and +10.0°")
+        selected = self._indices(indices)
+        if all(self._pages[i].fine_tenths == tenths for i in selected):
+            return
+        self._record()
+        for i in selected:
+            old = self._pages[i]
+            self._pages[i] = PageSpec(old.source_index, old.rotation_delta, tenths)
+
+    def fine_snapshot(self) -> list[int]:
+        return [p.fine_tenths for p in self._pages]
+
+    def state_snapshot(self) -> list[tuple[int, int, int]]:
+        return [(p.source_index, p.rotation_delta, p.fine_tenths)
+                for p in self._pages]
 
     def delete(self, index: int):
         self.delete_many([index])

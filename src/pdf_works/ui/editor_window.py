@@ -2,9 +2,9 @@
 from __future__ import annotations
 from pathlib import Path
 from PySide6.QtCore import QItemSelectionModel, Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut, QTransform
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QFileDialog, QHBoxLayout,
-    QLabel, QMessageBox, QPushButton, QListWidgetItem)
+    QLabel, QMessageBox, QPushButton, QListWidgetItem, QDoubleSpinBox)
 from .main_window import MainWindow
 from .roi_gallery import CropGallery
 from .split_dialog import SplitGroupsDialog
@@ -38,6 +38,7 @@ class EditWindow(MainWindow):
         self._list_navigation = False
         self._save_request = None
         self._saved_snapshot: list[tuple[int, int]] | None = None
+        self._saved_fine: list[int] | None = None
         super().__init__()
         self.setWindowTitle("pdf-works | Page editor beta")
 
@@ -74,6 +75,32 @@ class EditWindow(MainWindow):
             tools.addWidget(button)
         tools.addStretch(1)
         self.centralWidget().layout().insertLayout(2, tools)
+        fine_row = QHBoxLayout()
+        fine_row.setSpacing(6)
+        fine_row.addWidget(QLabel("傾き微調整"))
+        self.fine_left = QPushButton("−0.1°")
+        self.fine_right = QPushButton("+0.1°")
+        self.fine_spin = QDoubleSpinBox()
+        self.fine_spin.setRange(-10.0, 10.0)
+        self.fine_spin.setSingleStep(0.1)
+        self.fine_spin.setDecimals(1)
+        self.fine_spin.setSuffix("°")
+        self.fine_spin.setToolTip("選択ページの傾きを0.1度単位で入力。-10°～+10°")
+        self.fine_left.setToolTip("反時計回りへ0.1°")
+        self.fine_right.setToolTip("時計回りへ0.1°")
+        self.fine_left.clicked.connect(
+            lambda: self.fine_spin.setValue(round(self.fine_spin.value()-0.1, 1))
+        )
+        self.fine_right.clicked.connect(
+            lambda: self.fine_spin.setValue(round(self.fine_spin.value()+0.1, 1))
+        )
+        self.fine_spin.valueChanged.connect(self._on_fine_tilt)
+        fine_row.addWidget(self.fine_left)
+        fine_row.addWidget(self.fine_spin)
+        fine_row.addWidget(self.fine_right)
+        fine_row.addWidget(QLabel("（選択ページ・Ctrl+Zで戻す）"))
+        fine_row.addStretch(1)
+        self.centralWidget().layout().insertLayout(3, fine_row)
         self.save_button = QPushButton("別名保存")
         self.save_button.setObjectName("primary")
         self.save_button.clicked.connect(self._save_as)
@@ -83,6 +110,21 @@ class EditWindow(MainWindow):
         self._setup_optimization_tools()
         self._setup_keyboard_shortcuts()
         self._update_controls()
+
+    def _on_fine_tilt(self, degrees: float):
+        if self._session is None or self._page_output_busy():
+            return
+        self._edit(("fine", int(round(degrees * 10))))
+
+    def _sync_fine_controls(self):
+        if not hasattr(self, "fine_spin"):
+            return
+        page = (self._session.pages[self._current_page]
+                if self._session is not None
+                and 0 <= self._current_page < len(self._session.pages) else None)
+        self.fine_spin.blockSignals(True)
+        self.fine_spin.setValue(page.fine_tenths / 10.0 if page else 0.0)
+        self.fine_spin.blockSignals(False)
 
     def _setup_page_export_tools(self):
         actions = QHBoxLayout()
@@ -332,6 +374,11 @@ class EditWindow(MainWindow):
         self.viewer.set_page(width, height)
         self.page_label.setText(f"{index+1} / {len(self._sizes)}")
         self._update_controls()
+        self.viewer.set_fine_rotation(
+            self._session.pages[index].fine_tenths / 10.0
+            if self._session else 0.0
+        )
+        self._sync_fine_controls()
         self._schedule_thumbnails()
 
     def _setup_roi_tools(self):
@@ -490,7 +537,12 @@ class EditWindow(MainWindow):
         self.statusBar().showMessage("対象ページは現在の編集結果から削除されています。")
 
     def _dirty(self):
-        return self._session is not None and self._session.snapshot() != self._saved_snapshot
+        if self._session is None:
+            return False
+        if self._session.snapshot() != self._saved_snapshot:
+            return True
+        baseline = self._saved_fine or [0] * len(self._session.pages)
+        return self._session.fine_snapshot() != baseline
 
     def open_pdf(self, path):
         if self._page_output_busy():
@@ -504,6 +556,7 @@ class EditWindow(MainWindow):
         self._session = None
         self._source_sizes = []
         self._saved_snapshot = None
+        self._saved_fine = None
         self._gallery_files = []
         self._gallery_sources = []
         self._gallery_order = []
@@ -616,6 +669,7 @@ class EditWindow(MainWindow):
             self._save_request = None
             if response.get("status") == "ok":
                 self._saved_snapshot = self._session.snapshot() if self._session else None
+                self._saved_fine = self._session.fine_snapshot() if self._session else None
                 self.statusBar().showMessage("別名保存しました: " + response["destination"])
             else:
                 QMessageBox.warning(self, "保存できませんでした", response.get("message", "原因不明"))
@@ -625,6 +679,7 @@ class EditWindow(MainWindow):
             self._source_sizes = [tuple(x) for x in response["sizes"]]
             self._session = EditSession(len(self._source_sizes))
             self._saved_snapshot = self._session.snapshot()
+            self._saved_fine = self._session.fine_snapshot()
         if op in ("thumb", "render"):
             if response.get("epoch") != self._edit_epoch:
                 return
@@ -673,6 +728,8 @@ class EditWindow(MainWindow):
                 w, h = h, w
             self._sizes.append((w, h))
             mark = f" ↻{p.rotation_delta}°" if p.rotation_delta else ""
+            if p.fine_tenths:
+                mark += f" ∠{p.fine_tenths / 10.0:+.1f}°"
             self.page_list.addItem(QListWidgetItem(f"元{p.source_index+1}{mark}"))
         selected = max(0, min(selected, len(self._sizes) - 1))
         self.page_list.setCurrentRow(
@@ -708,6 +765,32 @@ class EditWindow(MainWindow):
                 if not rows:
                     return
                 self._session.rotate_many(rows, action[1])
+            elif operation == "fine":
+                if not rows:
+                    return
+                self._session.set_fine_many(rows, action[1])
+                # Keep arrow clicks responsive: no full list rebuild, no
+                # reloading thumbnails on unaffected pages.
+                self._edit_epoch += 1
+                self._latest_image_req = None
+                self._pending_thumbs.clear()
+                self._thumb_queue.clear()
+                for row in rows:
+                    page = self._session.pages[row]
+                    mark = f" ↻{page.rotation_delta}°" if page.rotation_delta else ""
+                    if page.fine_tenths:
+                        mark += f" ∠{page.fine_tenths / 10.0:+.1f}°"
+                    self.page_list.item(row).setText(
+                        f"元{page.source_index + 1}{mark}"
+                    )
+                    self.page_list.item(row).setIcon(QIcon())
+                    self._thumb_ready.discard(row)
+                self.viewer.set_fine_rotation(
+                    self._session.pages[self._current_page].fine_tenths / 10.0
+                )
+                self._schedule_thumbnails()
+                self._update_controls()
+                return
             elif operation == "delete":
                 if not rows:
                     return
@@ -762,17 +845,29 @@ class EditWindow(MainWindow):
                 active = ready and self._session.can_undo
             button.setEnabled(active)
         self.save_button.setEnabled(ready)
-        self.extract_button.setEnabled(ready and bool(rows))
-        self.split_button.setEnabled(ready and bool(rows))
-        self.groups_button.setEnabled(ready and total > 1)
+        for item in (self.fine_left, self.fine_right, self.fine_spin):
+            item.setEnabled(ready and bool(rows))
+        self._sync_fine_controls()
+        has_tilt = bool(self._session and any(self._session.fine_snapshot()))
+        self.extract_button.setToolTip(
+            "傾き微調整を別名保存して開き直すと、抽出・分割できます"
+            if has_tilt else "選択したページを新しいPDFに抽出"
+        )
+        self.extract_button.setEnabled(ready and bool(rows) and not has_tilt)
+        self.split_button.setEnabled(ready and bool(rows) and not has_tilt)
+        self.groups_button.setEnabled(ready and total > 1 and not has_tilt)
         self.optimize_button.setEnabled(
-            ready and bool(self._pdf_path) and not self._dirty()
+            ready and bool(self._pdf_path) and not self._dirty() and not has_tilt
+        )
+        self.optimize_button.setToolTip(
+            "傾き微調整したPDFは別名保存し、そのファイルを開き直してから最適化してください"
+            if has_tilt else "元PDFを品質維持で最適化"
         )
         self.open_button.setEnabled(ready or self._session is None)
         if hasattr(self, "roi_toggle"):
-            self.roi_toggle.setEnabled(ready)
+            self.roi_toggle.setEnabled(ready and not has_tilt)
             self.roi_clear.setEnabled(ready and self.viewer.roi is not None)
-            self.roi_export.setEnabled(ready and self.viewer.roi is not None)
+            self.roi_export.setEnabled(ready and self.viewer.roi is not None and not has_tilt)
             self.gallery_button.setEnabled(bool(self._gallery_files))
 
     def _save_as(self):
@@ -792,7 +887,8 @@ class EditWindow(MainWindow):
             return
         pages = self._session.snapshot()
         rid = self._bridge.send("export", generation=self._generation,
-            path=str(src), destination=str(target), pages=pages)
+            path=str(src), destination=str(target), pages=pages,
+            fine_angles=self._session.fine_snapshot())
         if rid is None:
             QMessageBox.warning(self, "保存できません", "PDF処理が混雑しています。少し待って再試行してください。")
             return
